@@ -53,7 +53,7 @@ Prices used for cost estimates are in `pipeline/analysis/gemini_request.py`
 
 | Name | Default | Purpose | When to change |
 |------|---------|---------|----------------|
-| `TRANSCRIPTION_PROVIDER` | `deepgram` | `deepgram`, `elevenlabs` or `whisper` (local). Cloud providers fall back to local Whisper on failure. | Usually from Settings. |
+| `TRANSCRIPTION_PROVIDER` | `deepgram` | `deepgram`, `elevenlabs`, `voicestudio` (host app) or `whisper` (local). Other providers fall back to local Whisper on failure. | Usually from Settings. |
 | `CLIPPYME_TRANSCRIBE_AUDIO_ONLY` | `true` | Send a mono 16 kHz FLAC instead of the video. | Rarely. |
 | `DEEPGRAM_API_KEY` | unset | Deepgram key. | — |
 | `DEEPGRAM_MODEL` | `nova-3` | Deepgram model. | — |
@@ -69,6 +69,13 @@ Prices used for cost estimates are in `pipeline/analysis/gemini_request.py`
 | `ELEVENLABS_NO_VERBATIM` | `false` | Strip fillers at the source (v2 only). | — |
 | `ELEVENLABS_AUDIO_ISOLATION` | `false` | Run the Voice Isolator before transcription (any provider; needs the ElevenLabs key). | Noisy or music-heavy sources. |
 | `ELEVENLABS_HTTP_TIMEOUT` / `ELEVENLABS_MAX_RETRIES` / `ELEVENLABS_MAX_FILE_MB` | `600` / `3` / `2900` | Request limits. | Rarely. |
+| `VOICESTUDIO_BASE_URL` | `http://host.docker.internal:3900/v1` | VoiceStudio's OpenAI-compatible endpoint on the host. | ClippyMe outside Docker: `http://127.0.0.1:3900/v1`. |
+| `VOICESTUDIO_API_KEY` | unset | Bearer token, if the server requires one. | Remote VoiceStudio. |
+| `VOICESTUDIO_MODEL` | `whisper-1` | Model name sent to the server; VoiceStudio uses the engine selected in the app. | Rarely. |
+| `VOICESTUDIO_LANGUAGE` | empty (falls back to the job language) | Language code; empty or `multi` auto-detects. | Single-language content. |
+| `VOICESTUDIO_HTTP_TIMEOUT` / `VOICESTUDIO_MAX_RETRIES` | `7200` / `2` | Request limits. | Long episodes on a CPU engine. |
+| `CLIPPYME_AUDIENCE_EVENTS` | `true` | Detect audience laughter/applause in the audio and mark it in the transcript for the AI prompt (skipped when ElevenLabs already tagged events). | `false` for sources without a live audience. |
+| `CLIPPYME_AUDIENCE_FLATNESS` / `CLIPPYME_AUDIENCE_LOUDNESS_DB` / `CLIPPYME_AUDIENCE_MIN_SEC` | `0.25` / `-6` / `0.8` | Reaction thresholds: spectral flatness, loudness relative to speech, minimum length. | Raise flatness if speech is flagged; lower it if laughs are missed. |
 | `WHISPER_MODEL` | picked from hardware | `tiny` … `large-v3`. | To force a size. |
 | `WHISPER_DIARIZE` | `true` | Diarization on the Whisper path; needs the `ENABLE_WHISPER_DIARIZE=1` image and a Hugging Face token. | — |
 | `HF_TOKEN` / `HUGGINGFACE_TOKEN` | unset | Hugging Face token (either name). | Whisper diarization; faster model downloads. |

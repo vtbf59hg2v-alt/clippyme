@@ -39,7 +39,7 @@ services:
       # model downloads without rate limits. Both names are accepted.
       - HF_TOKEN=${HF_TOKEN:-}
       - HUGGINGFACE_TOKEN=${HUGGINGFACE_TOKEN:-${HF_TOKEN:-}}
-      # ASR provider + credentials. TRANSCRIPTION_PROVIDER=deepgram|elevenlabs|whisper.
+      # ASR provider + credentials. TRANSCRIPTION_PROVIDER=deepgram|elevenlabs|voicestudio|whisper.
       - TRANSCRIPTION_PROVIDER=${TRANSCRIPTION_PROVIDER:-deepgram}
       - DEEPGRAM_API_KEY=${DEEPGRAM_API_KEY:-}
       - DEEPGRAM_MODEL=${DEEPGRAM_MODEL:-nova-3}
@@ -56,6 +56,18 @@ services:
       - ELEVENLABS_DIARIZE=${ELEVENLABS_DIARIZE:-true}
       - ELEVENLABS_NO_VERBATIM=${ELEVENLABS_NO_VERBATIM:-false}
       - ELEVENLABS_AUDIO_ISOLATION=${ELEVENLABS_AUDIO_ISOLATION:-false}
+      # VoiceStudio (4th STT provider): the desktop app's OpenAI-compatible
+      # endpoint on the host. Runs Whisper on the host GPU (MLX on Apple
+      # Silicon), which this container can't use. Free, no key needed locally.
+      - VOICESTUDIO_BASE_URL=${VOICESTUDIO_BASE_URL:-http://host.docker.internal:3900/v1}
+      - VOICESTUDIO_API_KEY=${VOICESTUDIO_API_KEY:-}
+      - VOICESTUDIO_LANGUAGE=${VOICESTUDIO_LANGUAGE:-}
+      # Audience-reaction detection: marks (laughter)/(applause) in the
+      # transcript for Gemini when the STT provider doesn't (all but
+      # ElevenLabs). Heuristic; set false for sources without a live audience.
+      - CLIPPYME_AUDIENCE_EVENTS=${CLIPPYME_AUDIENCE_EVENTS:-true}
+      - CLIPPYME_AUDIENCE_FLATNESS=${CLIPPYME_AUDIENCE_FLATNESS:-0.25}
+      - CLIPPYME_AUDIENCE_LOUDNESS_DB=${CLIPPYME_AUDIENCE_LOUDNESS_DB:--6}
       # Whisper fallback diarization. Requires ENABLE_WHISPER_DIARIZE=1
       # at build time AND HF_TOKEN set at runtime.
       - WHISPER_DIARIZE=${WHISPER_DIARIZE:-true}
@@ -131,6 +143,9 @@ services:
       - .:/app
       - /app/__pycache__
       - ./data:/app/data
+    extra_hosts:
+      # Docker Desktop provides this name already; Linux needs the mapping.
+      - "host.docker.internal:host-gateway"
     networks:
       - clippyme-net
     restart: unless-stopped

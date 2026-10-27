@@ -228,7 +228,7 @@ export function SettingsView({ apiKey, onApiKey, cookiesConfigured, onCookiesCha
           <div className="otxt"><div className="ot">Transcription engine</div><div className="od">Cloud STT falls back to local Whisper if its key is missing</div></div>
           <div className="r"><Segmented value={provider}
             onChange={(id) => { setProvider(id); saveKeys({ TRANSCRIPTION_PROVIDER: id }); }}
-            options={[{ id: 'deepgram', label: 'Deepgram' }, { id: 'elevenlabs', label: 'ElevenLabs' }, { id: 'whisper', label: 'Whisper' }]} /></div>
+            options={[{ id: 'deepgram', label: 'Deepgram' }, { id: 'elevenlabs', label: 'ElevenLabs' }, { id: 'voicestudio', label: 'VoiceStudio' }, { id: 'whisper', label: 'Whisper' }]} /></div>
         </div>
         {provider === 'deepgram' && !present.deepgram && (
           <div className="od" style={{ color: 'var(--warn, #f5a623)', padding: '0 0 8px 44px' }}>⚠ No Deepgram key saved — pipeline will use local Whisper.</div>

@@ -244,11 +244,22 @@ from clippyme.pipeline.transcription.diarization import (  # noqa: E402
 
 
 def transcribe_video(video_path):
+    """Transcribe, then mark audience reactions (laughter/applause) that the
+    provider didn't tag, so the Gemini prompt sees where the room reacted.
+    See ``transcription.audio_events``.
+    """
+    result = _transcribe_with_provider(video_path)
+    from clippyme.pipeline.transcription.audio_events import annotate_audio_events
+    return annotate_audio_events(video_path, result)
+
+
+def _transcribe_with_provider(video_path):
     """Dispatch to the configured transcription provider.
 
     Provider is selected via the ``TRANSCRIPTION_PROVIDER`` env var:
       - "deepgram" (default) → Deepgram Nova-3 REST API (requires DEEPGRAM_API_KEY)
       - "elevenlabs" → ElevenLabs Scribe REST API (requires ELEVENLABS_API_KEY)
+      - "voicestudio" → VoiceStudio's local OpenAI-compatible endpoint on the host
       - anything else / "whisper" → local Faster-Whisper
 
     On any cloud-provider failure we automatically fall back to Faster-Whisper
@@ -299,6 +310,15 @@ def transcribe_video(video_path):
                     "Deepgram transcription failed (%s) — falling back to Faster-Whisper", exc
                 )
                 print(f"⚠️  Deepgram transcription failed ({exc}); falling back to Faster-Whisper.")
+        elif provider == "voicestudio":
+            try:
+                from clippyme.pipeline.transcription.voicestudio_transcribe import transcribe_with_voicestudio
+                return transcribe_with_voicestudio(asr_input)
+            except Exception as exc:  # noqa: BLE001 — broad catch for safe fallback
+                logging.getLogger("clippyme").warning(
+                    "VoiceStudio transcription failed (%s) — falling back to Faster-Whisper", exc
+                )
+                print(f"⚠️  VoiceStudio transcription failed ({exc}); falling back to Faster-Whisper.")
         elif provider == "elevenlabs":
             try:
                 from clippyme.pipeline.transcription.elevenlabs_transcribe import transcribe_with_elevenlabs

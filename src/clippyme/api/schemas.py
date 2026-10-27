@@ -158,8 +158,8 @@ class ConfigUpdateRequest(BaseModel):
             if len(value) > 4096:
                 raise ValueError(f"config value for {name!r} too long (max 4096)")
         provider = values.get("TRANSCRIPTION_PROVIDER")
-        if provider not in (None, "", "deepgram", "elevenlabs", "whisper"):
-            raise ValueError("TRANSCRIPTION_PROVIDER must be deepgram, elevenlabs or whisper")
+        if provider not in (None, "", "deepgram", "elevenlabs", "voicestudio", "whisper"):
+            raise ValueError("TRANSCRIPTION_PROVIDER must be deepgram, elevenlabs, voicestudio or whisper")
         model = values.get("GEMINI_MODEL")
         if model and not GEMINI_MODEL_RE.fullmatch(model):
             raise ValueError("GEMINI_MODEL is not a valid Gemini model id")
