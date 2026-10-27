@@ -43,6 +43,16 @@ def test_parse_fallbacks_skips_malformed_entries():
     assert fbs[1].api_key == "sk-1"
 
 
+def test_primary_choice_moves_that_fallback_first(monkeypatch):
+    fbs = lf.parse_fallbacks("claude|http://b/v1|claude;codex|http://b/v1|codex;local|http://l/v1|q")
+    assert [f.name for f in lf.prefer(fbs, "codex")] == ["codex", "claude", "local"]
+    assert lf.prefer(fbs, "missing") is None
+    monkeypatch.delenv("LLM_PRIMARY", raising=False)
+    assert lf.primary_name() == "gemini"
+    monkeypatch.setenv("LLM_PRIMARY", " Claude ")
+    assert lf.primary_name() == "claude"
+
+
 def test_chain_moves_on_and_strips_thinking(monkeypatch):
     calls = []
 

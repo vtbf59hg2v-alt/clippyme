@@ -4,7 +4,7 @@
 // wiped by a transient getConfig failure.
 import { test, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, within, waitFor } from '@testing-library/react';
-import { SettingsView } from './settings.jsx';
+import { SettingsView, primaryOptions } from './settings.jsx';
 
 const getConfig = vi.fn();
 const saveConfig = vi.fn();
@@ -114,4 +114,10 @@ test('Twitch client id/secret rows show empty when unset', async () => {
   mount();
   const idRow = () => screen.getByLabelText('Twitch client ID').closest('.keyrow');
   await waitFor(() => expect(within(idRow()).getByText('empty')).toBeInTheDocument());
+});
+
+test('main-model choices list Gemini plus each fallback name', () => {
+  const text = 'claude|http://h/v1|claude\ncodex|http://h/v1|codex\n\nlocal|http://l/v1|q';
+  expect(primaryOptions(text, 'codex').map(([v]) => v)).toEqual(['gemini', 'claude', 'codex', 'local']);
+  expect(primaryOptions('', 'claude').map(([v]) => v)).toEqual(['gemini', 'claude']);
 });

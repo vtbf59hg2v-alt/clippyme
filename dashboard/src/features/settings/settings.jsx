@@ -53,6 +53,16 @@ function KeyRow({ icon, name, desc, value, onChange, onSave, onClear, placeholde
   );
 }
 
+// Main-model choices: Gemini plus every named LLM_FALLBACKS line.
+export function primaryOptions(fallbacksText, current) {
+  const names = String(fallbacksText || '').split('\n')
+    .map((l) => l.split('|')[0].trim().toLowerCase()).filter(Boolean);
+  const opts = [['gemini', 'Gemini (then fallbacks)']];
+  for (const n of new Set(names)) if (n !== 'gemini') opts.push([n, n]);
+  if (current && !opts.some(([v]) => v === current)) opts.push([current, `${current} (not in fallbacks)`]);
+  return opts;
+}
+
 export function SettingsView({ apiKey, onApiKey, cookiesConfigured, onCookiesChange, pushToast }) {
   const [gemini, setGemini] = useState(apiKey || '');
   const [deepgram, setDeepgram] = useState('');
@@ -72,6 +82,7 @@ export function SettingsView({ apiKey, onApiKey, cookiesConfigured, onCookiesCha
   const [provider, setProvider] = useState('deepgram');
   const [model, setModel] = useState('');
   const [fallbacks, setFallbacks] = useState('');
+  const [primary, setPrimary] = useState('gemini');
   const [models, setModels] = useState(FALLBACK_MODELS);
   const [loadingModels, setLoadingModels] = useState(false);
 
@@ -106,6 +117,7 @@ export function SettingsView({ apiKey, onApiKey, cookiesConfigured, onCookiesCha
     if (c.TRANSCRIPTION_PROVIDER) setProvider(c.TRANSCRIPTION_PROVIDER);
     if (c.GEMINI_MODEL) setModel(c.GEMINI_MODEL);
     setFallbacks(String(c.LLM_FALLBACKS || '').split(';').filter(Boolean).join('\n'));
+    setPrimary(String(c.LLM_PRIMARY || 'gemini').toLowerCase());
   };
 
   useEffect(() => {
@@ -242,6 +254,17 @@ export function SettingsView({ apiKey, onApiKey, cookiesConfigured, onCookiesCha
         {provider === 'elevenlabs' && !present.elevenlabs && (
           <div className="od" style={{ color: 'var(--warn, #f5a623)', padding: '0 0 8px 44px' }}>⚠ No ElevenLabs key saved — pipeline will use local Whisper.</div>
         )}
+        <div className="opt" style={{ borderBottom: 0 }}>
+          <div className="oico"><Icon n="star" /></div>
+          <div className="otxt"><div className="ot">Main model</div><div className="od">Answers first · the rest of the chain takes over when it fails or runs out of limits</div></div>
+          <div className="r">
+            <select className="key-input" aria-label="Main model" style={{ width: 'auto', minWidth: 200, fontFamily: 'var(--font-sans)' }}
+              value={primary}
+              onChange={(e) => { setPrimary(e.target.value); saveKeys({ LLM_PRIMARY: e.target.value }); }}>
+              {primaryOptions(fallbacks, primary).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+            </select>
+          </div>
+        </div>
         <div className="opt" style={{ borderBottom: 0 }}>
           <div className="oico"><Icon n="sparkles" /></div>
           <div className="otxt"><div className="ot">Gemini model</div><div className="od">Viral-moment detection model · applied to new jobs</div></div>

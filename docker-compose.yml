@@ -82,6 +82,8 @@ services:
       # Claude Code / Codex subscription bridge (scripts/llm_bridge.py).
       # Also editable in Settings.
       - LLM_FALLBACKS=${LLM_FALLBACKS:-}
+      # `gemini` (default) or a fallback name, e.g. `claude`, to answer first.
+      - LLM_PRIMARY=${LLM_PRIMARY:-gemini}
       - LLM_FALLBACK_TIMEOUT=${LLM_FALLBACK_TIMEOUT:-900}
       # yt-dlp hardening. NOCHECKCERT=1 disables SSL verification only in
       # trusted sandboxes; THROTTLED_RATE is the bytes/sec floor below

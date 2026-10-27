@@ -433,6 +433,13 @@ def get_viral_clips(transcript_result, video_duration, instructions=None):
 
     from clippyme.pipeline.analysis import llm_fallback
     fallbacks = llm_fallback.configured()
+    primary = llm_fallback.primary_name()
+    preferred = llm_fallback.prefer(fallbacks, primary) if primary != "gemini" else None
+    if preferred:
+        fallbacks = preferred
+        print(f"🎯 Main model: {preferred[0].name} ({preferred[0].model}) — Gemini is the last resort.")
+    elif primary != "gemini":
+        print(f"⚠️  LLM_PRIMARY={primary!r} matches no fallback entry — using Gemini first.")
 
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key and not fallbacks:
@@ -465,25 +472,35 @@ def get_viral_clips(transcript_result, video_duration, instructions=None):
         return None
 
     max_attempts = int(os.getenv("GEMINI_MAX_RETRIES", "3") or "3")
-    try:
-        if client is None:
-            raise RuntimeError("no Gemini key")
-        response, model_name = generate_with_model_fallback(
-            client, prompt, model_chain, max_attempts=max_attempts)
-    except Exception as e:
-        gemini_rate_limited = is_rate_limit_error(e)
-        print(f"❌ Gemini API failed across model chain: {e}")
-        # Out of Gemini quota (or no key): hand the same prompt to the
-        # LLM_FALLBACKS chain — local models, the subscription CLI bridge, …
+    response = None
+    if preferred:
         try:
             response, model_name = llm_fallback.generate_with_fallbacks(prompt, fallbacks)
         except Exception as fb_exc:
-            if fallbacks:
-                print(f"❌ {fb_exc}")
-            if gemini_rate_limited:
-                get_viral_clips._last_gemini_exhausted = True
-                print("🚫 All Gemini models rate-limited — no clips this run.")
-            return None
+            print(f"❌ {fb_exc}")
+            if client is None:
+                return None
+            fallbacks = []  # already tried; Gemini is the last resort now
+    if response is None:
+        try:
+            if client is None:
+                raise RuntimeError("no Gemini key")
+            response, model_name = generate_with_model_fallback(
+                client, prompt, model_chain, max_attempts=max_attempts)
+        except Exception as e:
+            gemini_rate_limited = is_rate_limit_error(e)
+            print(f"❌ Gemini API failed across model chain: {e}")
+            # Out of Gemini quota (or no key): hand the same prompt to the
+            # LLM_FALLBACKS chain — local models, the subscription CLI bridge, …
+            try:
+                response, model_name = llm_fallback.generate_with_fallbacks(prompt, fallbacks)
+            except Exception as fb_exc:
+                if fallbacks:
+                    print(f"❌ {fb_exc}")
+                if gemini_rate_limited:
+                    get_viral_clips._last_gemini_exhausted = True
+                    print("🚫 All Gemini models rate-limited — no clips this run.")
+                return None
 
     # --- Cost Calculation (pure math in gemini_request) ---
     cost_analysis = None

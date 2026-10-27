@@ -70,6 +70,7 @@ Prices used for cost estimates are in `pipeline/analysis/gemini_request.py`
 | `ELEVENLABS_AUDIO_ISOLATION` | `false` | Run the Voice Isolator before transcription (any provider; needs the ElevenLabs key). | Noisy or music-heavy sources. |
 | `ELEVENLABS_HTTP_TIMEOUT` / `ELEVENLABS_MAX_RETRIES` / `ELEVENLABS_MAX_FILE_MB` | `600` / `3` / `2900` | Request limits. | Rarely. |
 | `LLM_FALLBACKS` | empty | Models tried, in order, when every Gemini model fails or is out of quota (or no Gemini key is set): `name|base_url|model[|api_key]` entries separated by `;`, each an OpenAI-compatible endpoint. Use `scripts/llm_bridge.py` for Claude Code / Codex on a subscription. | Free-tier Gemini limits. |
+| `LLM_PRIMARY` | `gemini` | Which model answers first: `gemini`, or the name of an `LLM_FALLBACKS` entry (e.g. `claude`). Then the other fallbacks, with Gemini last. Also set in Settings → Main model. | Out of Gemini quota for the day, or preferring Claude. |
 | `LLM_FALLBACK_TIMEOUT` | `900` | Seconds per fallback call. | Slow local models. |
 | `VOICESTUDIO_BASE_URL` | `http://host.docker.internal:3900/v1` | VoiceStudio's OpenAI-compatible endpoint on the host. | ClippyMe outside Docker: `http://127.0.0.1:3900/v1`. |
 | `VOICESTUDIO_API_KEY` | unset | Bearer token, if the server requires one. | Remote VoiceStudio. |

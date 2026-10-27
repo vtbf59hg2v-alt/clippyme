@@ -9,6 +9,9 @@ Every fallback speaks the OpenAI ``/chat/completions`` dialect, which covers:
   host by running the Claude Code / Codex CLIs on the user's own login;
 - any paid OpenAI-compatible API, if the user wants one.
 
+``LLM_PRIMARY`` set to one of the fallback names flips the order: that model
+answers first, the other fallbacks follow, and Gemini comes last.
+
 ``LLM_FALLBACKS`` is a ``;``-separated list of ``name|base_url|model[|api_key]``
 entries, tried in order, e.g.::
 
@@ -59,6 +62,21 @@ def parse_fallbacks(raw: str | None) -> list[Fallback]:
 
 def configured() -> list[Fallback]:
     return parse_fallbacks(os.getenv("LLM_FALLBACKS"))
+
+
+def primary_name() -> str:
+    """``LLM_PRIMARY``: ``gemini`` (default) or the name of a fallback entry
+    that should answer first, with Gemini kept as the last resort."""
+    return (os.getenv("LLM_PRIMARY") or "gemini").strip().lower() or "gemini"
+
+
+def prefer(fallbacks: list[Fallback], name: str) -> list[Fallback] | None:
+    """Move the fallback called ``name`` to the front. ``None`` when no
+    entry has that name (the caller then keeps Gemini first)."""
+    chosen = [fb for fb in fallbacks if fb.name.lower() == name]
+    if not chosen:
+        return None
+    return chosen + [fb for fb in fallbacks if fb.name.lower() != name]
 
 
 def call_fallback(fb: Fallback, prompt: str, timeout: float | None = None) -> str:
