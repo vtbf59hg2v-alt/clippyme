@@ -1,6 +1,7 @@
 // Background clip-reprocess orchestration, extracted from App so the
 // routing rules (reframe-only vs compose-only vs both, toggle-gated params,
 // partial-failure recovery) are unit-testable without mounting the app.
+import { adsActive } from '../../lib/adsState.js';
 //
 // `api` is injected ({ reframeClip, composeClip }) — production passes the
 // api/client functions, tests pass fakes.
@@ -8,7 +9,8 @@
 export async function runApplyEdit({ jobId, idx, apiIdx = idx, params, api, updateClipState, pushToast, now = Date.now }) {
   const { reframeMode, baseMode, toggles, subtitleParams, hookParams, logoParams, gradeParams, bannerParams, dropRanges } = params;
   const reframeChanged = reframeMode !== baseMode;
-  const anyCompose = !!(toggles.smartcut || toggles.subtitles || toggles.hook || toggles.logo || toggles.grade || toggles.banner);
+  // Global ads (Settings → Ads) need a compose even with every layer off.
+  const anyCompose = !!(toggles.smartcut || toggles.subtitles || toggles.hook || toggles.logo || toggles.grade || toggles.banner || adsActive());
 
   // Persist the user's choices + flip the card into its processing state up
   // front (so the badge/preview already reflect the new reframe mode).

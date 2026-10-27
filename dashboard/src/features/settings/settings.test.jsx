@@ -25,6 +25,11 @@ vi.mock('../../api/client', () => ({
   logoStatus: vi.fn(async () => ({ configured: false })),
   uploadLogo: vi.fn(),
   deleteLogo: vi.fn(),
+  getAds: vi.fn(async () => ({ enabled: false, banner: {}, video: {} })),
+  saveAds: vi.fn(),
+  uploadAdBanner: vi.fn(),
+  uploadAdVideo: vi.fn(),
+  deleteAdAsset: vi.fn(),
 }));
 
 const EMPTY_CONFIG = { GEMINI_API_KEY: '', HF_TOKEN: '', DEEPGRAM_API_KEY: '', ELEVENLABS_API_KEY: '' };

@@ -251,6 +251,51 @@ async def _apply_banner(
     return banner_output
 
 
+async def _apply_ads(
+    current_input: str,
+    job_dir: str,
+    clip_index: int,
+    ad_cfg: dict,
+    ad_parts: dict,
+    metadata: dict,
+    clip_info: dict,
+    *,
+    timeline_intact: bool,
+    intermediate_files: list,
+) -> str:
+    """Sponsor banner for its time window, then the mid-roll ad insert.
+
+    The insert point is chosen on the clip's own timeline (transcript pauses
+    and audience laughs) BEFORE the banner pass — the banner doesn't change
+    timing, so the order between the two only matters for which frames the
+    banner can land on: never on the ad itself."""
+    from clippyme.editing import ads
+
+    at = None
+    if ad_parts.get("video"):
+        info = await asyncio.to_thread(ads.probe_media, current_input)
+        at = ads.break_point(ad_cfg["video"], info["duration"],
+                             (metadata or {}).get("transcript"), clip_info or {},
+                             timeline_intact)
+
+    if ad_parts.get("banner"):
+        banner_output = os.path.join(job_dir, f"composed_adbanner_{clip_index}.mp4")
+        ok = await asyncio.to_thread(
+            ads.add_timed_banner, current_input, ads.BANNER_PATH, banner_output,
+            ad_cfg["banner"])
+        if ok:
+            intermediate_files.append(banner_output)
+            current_input = banner_output
+
+    if at is not None:
+        insert_output = os.path.join(job_dir, f"composed_adinsert_{clip_index}.mp4")
+        intermediate_files.append(insert_output)
+        await asyncio.to_thread(ads.insert_ad_video, current_input, ads.VIDEO_PATH,
+                                insert_output, at)
+        current_input = insert_output
+    return current_input
+
+
 # Gap between the bottom edge of the letterboxed video and the first caption
 # line — enough to not touch the picture, small enough to still read as attached.
 CAPTION_BAND_PAD = 24
@@ -456,6 +501,13 @@ async def _compose_layers_impl(
     # downstream active.get('banner') check both see it.
     if (banner_params or {}).get("enabled"):
         active["banner"] = True
+    # Ads are a global setting (Settings → Ads), not a per-clip toggle: every
+    # composed clip gets them once they're switched on.
+    from clippyme.editing import ads
+    ad_cfg = await asyncio.to_thread(ads.load_config)
+    ad_parts = ads.active_parts(ad_cfg)
+    if any(ad_parts.values()):
+        active["ads"] = True
     logger.info(
         "compose_layers: clip_index=%d active=%s hook_text_len=%d subtitle_mode=%s",
         clip_index, list(active.keys()),
@@ -624,6 +676,17 @@ async def _compose_layers_impl(
             layers_applied.append("banner")
             logger.info("compose_layers: ✓ banner → %s", os.path.basename(current_input))
 
+        # Ads absolutely last: the ad insert changes the clip's length, so every
+        # timed layer above must already be burned in.
+        if active.get("ads"):
+            current_input = await _apply_ads(
+                current_input, job_dir, clip_index, ad_cfg, ad_parts, metadata,
+                clip_info, timeline_intact="smartcut" not in layers_applied,
+                intermediate_files=intermediate_files,
+            )
+            layers_applied.append("ads")
+            logger.info("compose_layers: ✓ ads → %s", os.path.basename(current_input))
+
         if os.path.abspath(current_input) != os.path.abspath(composed_path):
             shutil.copy2(current_input, composed_path)
 
@@ -634,7 +697,9 @@ async def _compose_layers_impl(
         # video-use step 7 / superpowers verification — probe the rendered
         # output and log any QA issues before handing it back. Soft check.
         await _self_eval(
-            composed_path, clip_info, "smartcut" in layers_applied, clip_index,
+            # An ad insert lengthens the clip on purpose → skip the length check.
+            composed_path, {} if "ads" in layers_applied else clip_info,
+            "smartcut" in layers_applied, clip_index,
         )
         _cleanup_intermediates(intermediate_files, composed_path)
         return composed_filename

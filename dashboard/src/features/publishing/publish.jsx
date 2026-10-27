@@ -11,6 +11,7 @@ import { seedToggles, seedHookParams, seedSubtitleParams, seedLogoParams, seedBa
 import { dateInTimezonePlus, manualScheduleIso, manualScheduleProblem, schedulePreview } from './scheduleDates';
 import { clearPublishIntent, publishIntent } from './publishIntent';
 import { useModalA11y } from '../../hooks/useModalA11y';
+import { adsActive } from '../../lib/adsState';
 
 // UI platform id → backend platform + account key. Exported so other
 // surfaces publishing to Zernio (live.jsx) don't re-derive this mapping.
@@ -125,7 +126,7 @@ export function PublishModal({ clips, jobId, clipStates = {}, preselections, onC
   const buildBody = (clip, idx, batchPos = 0, mode, scheduledFor) => {
     const cs = clipStates[idx] || {};
     const toggles = cs.toggles ?? seedToggles(preselections);
-    const any = Object.values(toggles).some(Boolean);
+    const any = Object.values(toggles).some(Boolean) || adsActive(); // global ads need a compose too
     const hookParams = cs.hookParams ?? seedHookParams(clip, preselections);
     const subtitleParams = cs.subtitleParams ?? seedSubtitleParams(preselections);
     const logoParams = cs.logoParams ?? seedLogoParams(preselections);

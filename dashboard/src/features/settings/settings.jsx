@@ -10,6 +10,7 @@ import {
   listFonts, uploadFont, deleteFont, logoStatus, uploadLogo, deleteLogo,
 } from '../../api/client';
 import { SUB_FONTS } from '../../lib/uiOptions';
+import { AdsPanel } from './adsPanel';
 import { getApiToken, setApiToken } from '../../api/apiToken';
 import { getCredentialMode, setCredentialMode } from '../../lib/credentialStorage';
 
@@ -233,6 +234,9 @@ export function SettingsView({ apiKey, onApiKey, cookiesConfigured, onCookiesCha
         {provider === 'deepgram' && !present.deepgram && (
           <div className="od" style={{ color: 'var(--warn, #f5a623)', padding: '0 0 8px 44px' }}>⚠ No Deepgram key saved — pipeline will use local Whisper.</div>
         )}
+        {provider === 'voicestudio' && (
+          <div className="od" style={{ padding: '0 0 8px 44px' }}>Keep the VoiceStudio app running — if it can&apos;t be reached the pipeline uses local Whisper.</div>
+        )}
         {provider === 'elevenlabs' && !present.elevenlabs && (
           <div className="od" style={{ color: 'var(--warn, #f5a623)', padding: '0 0 8px 44px' }}>⚠ No ElevenLabs key saved — pipeline will use local Whisper.</div>
         )}
@@ -317,6 +321,8 @@ export function SettingsView({ apiKey, onApiKey, cookiesConfigured, onCookiesCha
           </div>
         </div>
       </Panel>
+
+      <AdsPanel pushToast={pushToast} />
 
       <Panel title="Downloads" sub="For age- or region-restricted sources" icon="cookie">
         <div className="opt" style={{ borderBottom: 0 }}>

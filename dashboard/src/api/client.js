@@ -7,6 +7,7 @@ import { getApiUrl } from './config.js';
 import { apiFetch } from './apiToken.js';
 import { seedToggles, seedHookParams, seedSubtitleParams, seedLogoParams, seedBannerParams } from '../lib/seedClipParams.js';
 import { clipDownloadName } from '../lib/clipFilename.js';
+import { adsActive } from '../lib/adsState.js';
 
 export { clipDownloadName };
 
@@ -123,7 +124,8 @@ export async function getClipTranscript(jobId, index) {
 export async function exportClip(jobId, index, clip, state, preselections) {
   const toggles = state?.toggles ?? seedToggles(preselections);
   const any = Object.values(toggles || {}).some(Boolean);
-  if (!any) { downloadClip(clip, index); return 'raw'; }
+  // Ads are global (Settings → Ads): a clip with every layer off still composes.
+  if (!any && !adsActive()) { downloadClip(clip, index); return 'raw'; }
   const hook = state?.hookParams ?? seedHookParams(clip, preselections);
   const subs = state?.subtitleParams ?? seedSubtitleParams(preselections);
   const logo = state?.logoParams ?? seedLogoParams(preselections);
@@ -320,6 +322,37 @@ export async function uploadLogo(file) {
 export async function deleteLogo() {
   const res = await apiFetch(getApiUrl('/api/config/logo'), { method: 'DELETE' });
   if (!res.ok) throw new Error('Logo remove failed');
+  return res.json().catch(() => ({}));
+}
+
+export async function getAds() {
+  const res = await apiFetch(getApiUrl('/api/config/ads'));
+  if (!res.ok) throw new Error('Could not load ad settings');
+  return res.json();
+}
+
+export async function saveAds(settings) {
+  const res = await apiFetch(getApiUrl('/api/config/ads'), {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(settings),
+  });
+  if (!res.ok) throw new Error('Saving ad settings failed');
+  return res.json();
+}
+
+async function uploadAdAsset(path, field, file, what) {
+  const fd = new FormData();
+  fd.append(field, file);
+  const res = await apiFetch(getApiUrl(path), { method: 'POST', body: fd });
+  if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.detail || `${what} upload failed`); }
+  return res.json().catch(() => ({}));
+}
+
+export const uploadAdBanner = (file) => uploadAdAsset('/api/config/ads/banner', 'banner_file', file, 'Ad banner');
+export const uploadAdVideo = (file) => uploadAdAsset('/api/config/ads/video', 'video_file', file, 'Ad video');
+
+export async function deleteAdAsset(kind) {
+  const res = await apiFetch(getApiUrl(`/api/config/ads/${kind}`), { method: 'DELETE' });
+  if (!res.ok) throw new Error('Remove failed');
   return res.json().catch(() => ({}));
 }
 

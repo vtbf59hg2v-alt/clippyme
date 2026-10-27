@@ -252,3 +252,39 @@ def test_zernio_accounts_requires_key(client, monkeypatch):
     monkeypatch.setattr(config_module, "load_zernio_config", lambda: {})
     r = client.get("/api/zernio/accounts")
     assert r.status_code == 400
+
+
+# --- ads ---------------------------------------------------------------------
+
+def test_ads_settings_round_trip_and_banner_upload(client):
+    r = client.get("/api/config/ads")
+    assert r.status_code == 200 and r.json()["enabled"] is False
+    r = client.put("/api/config/ads", json={"enabled": True, "banner": {"enabled": True,
+                                            "start": 2, "duration": 5, "position": "nope"}})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["enabled"] and body["banner"]["start"] == 2.0
+    assert body["banner"]["position"] == "bottom-center"
+    assert body["banner_uploaded"] is False
+
+    r = client.post("/api/config/ads/banner", files={"banner_file": ("b.png", PNG_MAGIC)})
+    assert r.status_code == 200
+    assert client.get("/api/config/ads").json()["banner_uploaded"] is True
+    assert client.request("DELETE", "/api/config/ads/banner").status_code == 200
+    assert client.get("/api/config/ads").json()["banner_uploaded"] is False
+
+
+def test_ads_banner_rejects_non_png(client):
+    r = client.post("/api/config/ads/banner", files={"banner_file": ("b.png", b"GIF89a....")})
+    assert r.status_code == 400
+
+
+def test_ads_video_rejects_garbage_and_leaves_nothing(client, tmp_path):
+    r = client.post("/api/config/ads/video", files={"video_file": ("ad.mp4", b"nope" * 100)})
+    assert r.status_code == 400
+    assert client.get("/api/config/ads").json()["video_uploaded"] is False
+    assert not [p for p in os.listdir(tmp_path / "data") if p.startswith(".upload-")]
+
+
+def test_ads_unknown_asset_delete_404(client):
+    assert client.request("DELETE", "/api/config/ads/other").status_code == 404

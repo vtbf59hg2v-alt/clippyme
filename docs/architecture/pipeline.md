@@ -81,7 +81,7 @@ and every consumer resolves files through `clip_resolve`.
 Download and publish run the same compose, so what is previewed is what is
 delivered. Layers always apply in this order:
 
-**Grade → Subtitles → Smart Cut → Hook → Logo → Banner**
+**Grade → Subtitles → Smart Cut → Hook → Logo → Banner → Ads**
 
 | Layer | What it does | Why it sits there |
 |-------|--------------|-------------------|
@@ -91,6 +91,7 @@ delivered. Layers always apply in this order:
 | Hook | Title text overlay (Pillow, emoji, optional banner and outline) | Shown for the first 4 s, or the whole clip when reframe is `disabled` |
 | Logo | Uploaded PNG watermark | Above the video content |
 | Banner | Platform logo + handle attribution | Topmost, rendered as its own pass |
+| Ads | Global (Settings → Ads): sponsor PNG for a time window, then an ad video inserted at a pause between phrases (preferably after an audience laugh), before or after the clip | Last, because the insert changes the clip's length |
 
 Grade + Subtitles and Hook + Logo are fused into single encodes when both are
 enabled; fusion changes where a step renders, never the order. Each clip's

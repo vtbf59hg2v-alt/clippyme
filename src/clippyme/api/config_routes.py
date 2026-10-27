@@ -1,4 +1,4 @@
-"""Config-family HTTP routes: keys, cookies, custom fonts, brand logo, Zernio.
+"""Config-family HTTP routes: keys, cookies, custom fonts, brand logo, ads, Zernio.
 
 Split out of ``app.py`` (which is meant to be a thin FastAPI layer) because
 these handlers form one cohesive surface that touches **none** of the job
@@ -350,6 +350,87 @@ async def delete_logo(request: Request):
     except FileNotFoundError:
         pass
     return {"status": "ok", "message": "Logo removed"}
+
+
+# --- Ads: timed sponsor banner + mid-roll ad insert -------------------------
+AD_VIDEO_MAX_BYTES = 500 * 1024 * 1024
+
+
+@router.get("/api/config/ads")
+async def get_ads(request: Request):
+    """Ad settings plus which ad assets are uploaded."""
+    require_trusted_config_request(request)
+    from clippyme.editing import ads
+    return await asyncio.to_thread(ads.status)
+
+
+@router.put("/api/config/ads")
+async def put_ads(request: Request, body: dict):
+    """Save ad settings (normalised and clamped server-side)."""
+    require_trusted_config_request(request)
+    from clippyme.editing import ads
+    await asyncio.to_thread(ads.save_config, body)
+    return await asyncio.to_thread(ads.status)
+
+
+@router.post("/api/config/ads/banner")
+async def upload_ad_banner(request: Request, banner_file: UploadFile = File(...)):
+    """Upload the sponsor banner PNG (same limits as the brand logo)."""
+    require_trusted_config_request(request)
+    from clippyme.editing import ads
+    chunks: list[bytes] = []
+    total = 0
+    while chunk := await banner_file.read(64 * 1024):
+        total += len(chunk)
+        if total > LOGO_MAX_BYTES:
+            raise HTTPException(status_code=413, detail="Banner file too large (max 10 MB)")
+        chunks.append(chunk)
+    content = b"".join(chunks)
+    if not content.startswith(_PNG_MAGIC):
+        raise HTTPException(status_code=400, detail="Banner must be a PNG (transparent recommended)")
+    await asyncio.to_thread(_validate_logo_png, content)
+    await asyncio.to_thread(_atomic_write_bytes, ads.BANNER_PATH, content, 0o644)
+    return {"status": "ok", "message": "Ad banner saved"}
+
+
+@router.post("/api/config/ads/video")
+async def upload_ad_video(request: Request, video_file: UploadFile = File(...)):
+    """Upload the sponsor video; streamed to disk, then checked with ffprobe."""
+    require_trusted_config_request(request)
+    from clippyme.editing import ads
+    directory = os.path.dirname(ads.VIDEO_PATH) or "."
+    os.makedirs(directory, exist_ok=True)
+    fd, tmp_path = tempfile.mkstemp(prefix=".upload-", suffix=".tmp", dir=directory)
+    try:
+        total = 0
+        with os.fdopen(fd, "wb") as out:
+            while chunk := await video_file.read(1024 * 1024):
+                total += len(chunk)
+                if total > AD_VIDEO_MAX_BYTES:
+                    raise HTTPException(status_code=413, detail="Ad video too large (max 500 MB)")
+                out.write(chunk)
+        try:
+            info = await asyncio.to_thread(ads.validate_ad_video, tmp_path)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=f"Ad video rejected: {exc}") from exc
+        os.replace(tmp_path, ads.VIDEO_PATH)
+    finally:
+        with contextlib.suppress(OSError):
+            os.remove(tmp_path)
+    return {"status": "ok", "message": "Ad video saved", "duration": round(info["duration"], 1)}
+
+
+@router.delete("/api/config/ads/{asset}")
+async def delete_ad_asset(request: Request, asset: str):
+    """Remove the uploaded ad banner or ad video."""
+    require_trusted_config_request(request)
+    from clippyme.editing import ads
+    paths = {"banner": ads.BANNER_PATH, "video": ads.VIDEO_PATH}
+    if asset not in paths:
+        raise HTTPException(status_code=404, detail="Unknown ad asset")
+    with contextlib.suppress(FileNotFoundError):
+        await asyncio.to_thread(os.remove, paths[asset])
+    return {"status": "ok", "message": f"Ad {asset} removed"}
 
 
 @router.get("/api/config/zernio")

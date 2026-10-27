@@ -16,7 +16,8 @@ import { HistoryView } from '../features/history/history';
 import { SettingsView, ApiKeyModal } from '../features/settings/settings';
 import { LiveMonitorView } from '../features/live-monitor/live';
 import { EditClipModal } from '../features/clip-editor/editClipModal';
-import { optsToPreselections, restoreJob, deleteHistoryJob, getStorageUsage, cancelJob, pauseJob, resumeJob, stopJob, reframeClip, composeClip } from '../api/client';
+import { optsToPreselections, restoreJob, deleteHistoryJob, getStorageUsage, cancelJob, pauseJob, resumeJob, stopJob, reframeClip, composeClip, getAds } from '../api/client';
+import { setAdsActive } from '../lib/adsState';
 import { allPresets, getDefaultPresetOpts, getDefaultPresetId, saveUserPreset, deleteUserPreset, setDefaultPreset } from '../features/create/presets';
 import { HOOK_STYLE_DEFAULT } from '../lib/uiOptions';
 import { clipStateToParams, buildBulkPlan } from '../features/clip-editor/bulkApply';
@@ -158,6 +159,8 @@ export default function App() {
     if (tab === 'history' && !viewingHistory) syncHistory();
   }, [tab, viewingHistory, syncHistory]);
   useSessionPersistence({ status, jobId, results, processingMedia, activeTab: tab, preselections });
+  // Global ads (Settings → Ads) change whether a layer-less clip must compose.
+  useEffect(() => { getAds().then(setAdsActive).catch(() => {}); }, []);
 
   const dismissToast = useCallback((id) => setToasts((items) => items.filter((item) => item.id !== id)), []);
 
