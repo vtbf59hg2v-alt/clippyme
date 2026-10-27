@@ -431,12 +431,17 @@ def get_viral_clips(transcript_result, video_duration, instructions=None):
     print("🤖  Analyzing with Gemini...")
     get_viral_clips._last_gemini_exhausted = False
 
+    from clippyme.pipeline.analysis import llm_fallback
+    fallbacks = llm_fallback.configured()
+
     api_key = os.getenv("GEMINI_API_KEY")
-    if not api_key:
+    if not api_key and not fallbacks:
         print("❌ Error: GEMINI_API_KEY not found in environment variables.")
         return None
+    if not api_key:
+        print("⚠️  No GEMINI_API_KEY — using the LLM_FALLBACKS models only.")
 
-    client = genai.Client(api_key=api_key)
+    client = genai.Client(api_key=api_key) if api_key else None
     
     # Use selected model from env, or default to gemini-3.5-flash
     model_name = os.getenv("GEMINI_MODEL", "gemini-3.5-flash")
@@ -461,14 +466,24 @@ def get_viral_clips(transcript_result, video_duration, instructions=None):
 
     max_attempts = int(os.getenv("GEMINI_MAX_RETRIES", "3") or "3")
     try:
+        if client is None:
+            raise RuntimeError("no Gemini key")
         response, model_name = generate_with_model_fallback(
             client, prompt, model_chain, max_attempts=max_attempts)
     except Exception as e:
-        if is_rate_limit_error(e):
-            get_viral_clips._last_gemini_exhausted = True
-            print("🚫 All Gemini models rate-limited — no clips this run.")
+        gemini_rate_limited = is_rate_limit_error(e)
         print(f"❌ Gemini API failed across model chain: {e}")
-        return None
+        # Out of Gemini quota (or no key): hand the same prompt to the
+        # LLM_FALLBACKS chain — local models, the subscription CLI bridge, …
+        try:
+            response, model_name = llm_fallback.generate_with_fallbacks(prompt, fallbacks)
+        except Exception as fb_exc:
+            if fallbacks:
+                print(f"❌ {fb_exc}")
+            if gemini_rate_limited:
+                get_viral_clips._last_gemini_exhausted = True
+                print("🚫 All Gemini models rate-limited — no clips this run.")
+            return None
 
     # --- Cost Calculation (pure math in gemini_request) ---
     cost_analysis = None
@@ -510,6 +525,17 @@ def get_viral_clips(transcript_result, video_duration, instructions=None):
             """
             retry_model = os.getenv("GEMINI_RETRY_MODEL") or DEFAULT_RETRY_MODEL
             retry_prompt = build_reformat_prompt(err_msg, text)
+            if client is None or ":" in model_name:
+                # The answer came from a fallback model (Gemini unavailable):
+                # reformat with the fallback chain too.
+                try:
+                    retry_resp, used = llm_fallback.generate_with_fallbacks(
+                        retry_prompt, fallbacks)
+                    print(f"🔁 Retry via {used} (reformatter)")
+                    return retry_resp.text
+                except Exception as e:
+                    print(f"⚠️  Fallback retry failed: {e}")
+                    return ""
             try:
                 retry_chain = build_model_chain(
                     retry_model, os.getenv("GEMINI_FALLBACK_MODELS"))

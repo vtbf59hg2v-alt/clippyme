@@ -71,6 +71,7 @@ export function SettingsView({ apiKey, onApiKey, cookiesConfigured, onCookiesCha
   const [fonts, setFonts] = useState([]);
   const [provider, setProvider] = useState('deepgram');
   const [model, setModel] = useState('');
+  const [fallbacks, setFallbacks] = useState('');
   const [models, setModels] = useState(FALLBACK_MODELS);
   const [loadingModels, setLoadingModels] = useState(false);
 
@@ -104,6 +105,7 @@ export function SettingsView({ apiKey, onApiKey, cookiesConfigured, onCookiesCha
     });
     if (c.TRANSCRIPTION_PROVIDER) setProvider(c.TRANSCRIPTION_PROVIDER);
     if (c.GEMINI_MODEL) setModel(c.GEMINI_MODEL);
+    setFallbacks(String(c.LLM_FALLBACKS || '').split(';').filter(Boolean).join('\n'));
   };
 
   useEffect(() => {
@@ -255,6 +257,19 @@ export function SettingsView({ apiKey, onApiKey, cookiesConfigured, onCookiesCha
               {loadingModels ? '…' : 'Refresh'}
             </Btn>
           </div>
+        </div>
+        <div className="opt" style={{ borderBottom: 0, alignItems: 'flex-start' }}>
+          <div className="oico"><Icon n="layers" /></div>
+          <div className="otxt" style={{ flex: 1 }}>
+            <div className="ot">Fallback models</div>
+            <div className="od">Used in order when Gemini is out of quota. One per line: name|base URL|model[|key], any OpenAI-compatible server (local model, Claude/Codex bridge).</div>
+            <textarea className="key-input" rows={3} aria-label="Fallback models"
+              style={{ width: '100%', marginTop: 8, fontFamily: 'var(--font-mono, monospace)', fontSize: 12 }}
+              placeholder={'claude|http://host.docker.internal:3901/v1|claude\nlocal|http://host.docker.internal:8090/v1|local'}
+              value={fallbacks} onChange={(e) => setFallbacks(e.target.value)} />
+          </div>
+          <div className="r"><Btn variant="secondary" size="sm" icon="check"
+            onClick={() => saveKeys({ LLM_FALLBACKS: fallbacks.split('\n').map((l) => l.trim()).filter(Boolean).join(';') })}>Save</Btn></div>
         </div>
       </Panel>
 

@@ -18,6 +18,7 @@ VALID_CONFIG_KEYS = (
     "DEEPGRAM_API_KEY",
     "ELEVENLABS_API_KEY",
     "TRANSCRIPTION_PROVIDER",
+    "LLM_FALLBACKS",
     "TWITCH_CLIENT_ID",
     "TWITCH_CLIENT_SECRET",
 )
@@ -165,6 +166,7 @@ def load_persistent_config() -> dict:
         "DEEPGRAM_API_KEY": os.environ.get("DEEPGRAM_API_KEY", ""),
         "ELEVENLABS_API_KEY": os.environ.get("ELEVENLABS_API_KEY", ""),
         "TRANSCRIPTION_PROVIDER": os.environ.get("TRANSCRIPTION_PROVIDER", "deepgram"),
+        "LLM_FALLBACKS": os.environ.get("LLM_FALLBACKS", ""),
         "TWITCH_CLIENT_ID": os.environ.get("TWITCH_CLIENT_ID", ""),
         "TWITCH_CLIENT_SECRET": os.environ.get("TWITCH_CLIENT_SECRET", ""),
     }
