@@ -11,6 +11,8 @@ import datetime
 import json
 import time
 
+from clippyme.core.clip_style import current_style, target_bounds
+
 # Paid-tier Standard pricing, USD per 1M tokens, text input. Thinking tokens
 # are billed at the output rate. Source: ai.google.dev/gemini-api/docs/pricing
 # (checked 2026-09-28) — update when Google changes rates. "long": rates once
@@ -53,8 +55,8 @@ def model_rates(model_name, prompt_tokens=0, *, today=None, pricing=None):
     return {"input": float(entry["input"]), "output": float(entry["output"])}
 
 GEMINI_PROMPT_TEMPLATE = """
-You are a senior short-form video editor specialized in TikTok, IG Reels and YouTube Shorts virality. Read the ENTIRE transcript + word-level timestamps and select the 3–15 MOST VIRAL 15–60s moments.
-
+You are a senior short-form video editor specialized in TikTok, IG Reels and YouTube Shorts virality. Read the ENTIRE transcript with its timestamps and select the {clip_count} MOST VIRAL {min_s}–{max_s}s moments.
+{style_block}
 ## IS THIS MOMENT EVEN WORTH CUTTING? (gate — apply BEFORE scoring)
 A clip must hit at least ONE of these HARD. A moment that is merely pleasant,
 well-spoken or on-topic is NOT a clip, however clean the audio is.
@@ -111,16 +113,11 @@ Absence of these markers means the provider didn't tag audio events; score
 normally on the words alone.
 
 ## HARD CONSTRAINTS (violating = clip REJECTED)
-- 15s ≤ duration ≤ 60s
+- {duration_rule}
 - start on a complete sentence boundary; end on a natural beat
 - no cold-open ambiguity ("...and then she said" with no setup)
 - 0 ≤ start < end ≤ VIDEO_DURATION_SECONDS
-- ANCHOR TO REAL TIMESTAMPS: `start` MUST equal the `s` (start) of the FIRST
-  word of the opening sentence in the WORDS section, and `end` MUST equal the
-  `e` (end) of the LAST word of the closing sentence. Do NOT invent times between
-  words and do NOT round to whole seconds — copy the exact `s`/`e` of those two
-  words. This is how you avoid cutting mid-sentence or mid-word.
-- start and end are FLOAT SECONDS with up to 3 decimals (e.g. 12.340, 1517.724).
+{anchor_rule}- start and end are FLOAT SECONDS with up to 3 decimals (e.g. 12.340, 1517.724).
   NEVER emit "MM.SS.mmm" (e.g. 25.17.724), "MM:SS", "HH:MM:SS", or any two-dot / colon
   time format. A value of 1517.724 is correct; "25.17.724" is a BUG.
 - Never cut in the middle of a word, phrase, or sentence — the clip must open on
@@ -257,11 +254,7 @@ BAD (would score ~30 — DO NOT emit anything like this):
 VIDEO_DURATION_SECONDS: {video_duration}
 {creator_block}
 
-TRANSCRIPT_TEXT (raw):
-{transcript_text}
-
-WORDS (TOON tabular: header `words[N]{{w,s,e}}:`, then one row `w,s,e` per word, s/e seconds):
-{words_toon}
+{transcript_block}
 
 {user_instructions_block}
 
@@ -298,6 +291,147 @@ Output schema:
   ]
 }}
 """
+
+
+WORD_ANCHOR_RULE = """- ANCHOR TO REAL TIMESTAMPS: `start` MUST equal the `s` (start) of the FIRST
+  word of the opening sentence in the WORDS section, and `end` MUST equal the
+  `e` (end) of the LAST word of the closing sentence. Do NOT invent times between
+  words and do NOT round to whole seconds — copy the exact `s`/`e` of those two
+  words. This is how you avoid cutting mid-sentence or mid-word.
+"""
+
+SEGMENT_ANCHOR_RULE = """- ANCHOR TO REAL TIMESTAMPS: `start` MUST equal the start time of the
+  SEGMENTS line where the setup begins, and `end` MUST equal the end time of
+  the line that closes the bit (the audience reaction included). Copy those
+  numbers exactly — do NOT invent times between lines or round them; the
+  pipeline then snaps the edges to the exact words.
+"""
+
+# Sketch shows and stand-up: the stock rules hunt 15–60s hooks, which cut a
+# joke away from its setup. These override them for CLIP_STYLE=comedy.
+COMEDY_STYLE_BLOCK = """
+## SKETCH / STAND-UP MODE (this source is a comedy show — these rules OVERRIDE
+## the hook and duration guidance below wherever they disagree)
+A clip is ONE COMPLETE BIT: setup → development → punchline → the audience
+laugh. A viewer who has never seen the show must get the joke from the clip
+alone.
+- START on the line that sets up the situation or premise. NEVER start on a
+  reaction to something the viewer has not seen ("Слушай, ну слабовато"), on
+  an answer whose question is outside the clip, or on a back-reference ("В
+  общем…", "Так вот", "Он вырос", "И тогда"). A 5–10s setup is fine here:
+  judge HOOK_STRENGTH on how quickly the premise is clear, not on the first 3s.
+- END after the laugh or applause on the LAST tag of the bit, before the next
+  topic or performer begins. Never end on a setup whose punchline is cut off.
+- LENGTH: usually 40–120s. A joke that is complete on its own may be 30s.
+  Never longer than 120s.
+- LONG BITS (over ~2 min): split into parts of at most 120s. Parts MAY overlap
+  when that helps, but EVERY part must open on its own meaningful setup — a new
+  question, a new premise, a new character entering — never mid-thought.
+- NESTED VERSIONS are welcome: when ~30s inside a longer bit works on its own,
+  emit BOTH the short standalone clip and the longer clip that contains it.
+- No other fragments of the same bit: every clip is either a complete bit, a
+  split part with its own setup, or a nested standalone joke.
+- Prefer bits that land at least two audience laughs, or one big laugh or
+  applause.
+- VISUAL GAGS: when the joke depends on something SHOWN on screen (a photo, a
+  listing, a price tag, a prop) rather than said, add "visual_gag": true to
+  that clip so it is rendered full-frame and the object stays visible.
+- Speech-recognition noise: a phrase repeated over and over, or lines marked
+  "(ASR repeat ×N)", is a transcription error, not dialogue — never build a
+  clip on such a stretch.
+- Many shows are not recent: do not present a topical joke as fresh news in
+  titles or descriptions.
+- Emit every bit that is complete and funny — typically 8–25 for a whole long
+  show, 0–4 for a single act — nested versions and split parts included.
+"""
+
+
+# Caption-style sound labels some ASR engines write as plain upper-case lines
+# ("СМЕХ", "АПЛОДИСМЕНТЫ"): mapped onto the template's AUDIO CUES markers.
+_SOUND_LABELS = (
+    ("СМЕХ", "(laughter)"), ("ХОХОТ", "(laughter)"), ("LAUGH", "(laughter)"),
+    ("АПЛОДИСМЕНТ", "(applause)"), ("APPLAUSE", "(applause)"),
+    ("ОВАЦИ", "(applause)"), ("МУЗЫК", "(music)"), ("ПЕСНЯ", "(music)"),
+    ("MUSIC", "(music)"),
+)
+
+
+def _sound_label(text):
+    """``(laughter)`` etc. for an upper-case sound caption, else None."""
+    letters = [c for c in text if c.isalpha()]
+    if not letters or not all(c.isupper() for c in letters) or len(text.split()) > 4:
+        return None
+    for stem, marker in _SOUND_LABELS:
+        if stem in text:
+            return marker
+    return None
+
+
+def _collapse_repeats(text, max_n=8, keep=2):
+    """Shrink an n-gram looping 4+ times in a row to ``keep`` copies + "…".
+
+    Whisper-family models sometimes loop on one phrase for minutes ("в
+    Санкт-Петербурге, в Санкт-Петербурге, …"); the loop wastes tokens and
+    reads to the model like a real, very dull monologue.
+    """
+    tokens = text.split()
+    norm = [t.strip(".,!?…;:\"«»").lower() for t in tokens]
+    out, i = [], 0
+    while i < len(tokens):
+        collapsed = False
+        for n in range(1, max_n + 1):
+            gram = norm[i:i + n]
+            if len(gram) < n or not any(gram):
+                break
+            reps = 1
+            while norm[i + reps * n:i + (reps + 1) * n] == gram:
+                reps += 1
+            if reps >= 4:
+                out.extend(tokens[i:i + n * keep])
+                out.append("…")
+                i += reps * n
+                collapsed = True
+                break
+        if not collapsed:
+            out.append(tokens[i])
+            i += 1
+    return " ".join(out)
+
+
+def build_segment_lines(transcript_result):
+    """Phrase-level transcript: one ``[start-end] text`` line per segment.
+
+    Looping phrases inside a line are collapsed, and a run of identical lines
+    is merged into one marked "(ASR repeat ×N)" so the model can skip it.
+    Upper-case sound captions become ``(laughter)``-style markers, and a run
+    of them is merged without the repeat flag — it is a real reaction.
+    """
+    lines, prev, run = [], None, None
+    for segment in transcript_result.get('segments', []):
+        text = _collapse_repeats(" ".join(str(segment.get('text', '')).split()))
+        if not text:
+            continue
+        marker = _sound_label(text)
+        text = marker or text
+        start, end = segment.get('start'), segment.get('end')
+        if start is None or end is None:
+            continue
+        key = text.strip(".,!?… ").lower()
+        if run is not None and key == prev:
+            run["end"], run["count"] = end, run["count"] + 1
+            continue
+        speaker = segment.get('speaker')
+        run = {"start": start, "end": end, "text": text, "count": 1,
+               "speaker": speaker, "sound": marker is not None}
+        lines.append(run)
+        prev = key
+    rendered = []
+    for line in lines:
+        who = f"S{line['speaker']}: " if line["speaker"] is not None else ""
+        flagged = line["count"] >= 3 and not line["sound"]
+        repeat = f" (ASR repeat ×{line['count']})" if flagged else ""
+        rendered.append(f"[{line['start']}-{line['end']}] {who}{line['text']}{repeat}")
+    return "\n".join(rendered)
 
 
 def extract_prompt_words(transcript_result):
@@ -354,7 +488,8 @@ def encode_words_toon(words):
     return "\n".join(lines)
 
 
-def build_viral_prompt(transcript_result, video_duration, instructions=None, creator=None):
+def build_viral_prompt(transcript_result, video_duration, instructions=None, creator=None,
+                       style=None):
     """Return ``(prompt, words)`` for the primary Gemini call.
 
     ``words`` is also what ``gemini_parser.backfill_hook_text`` needs later,
@@ -364,8 +499,42 @@ def build_viral_prompt(transcript_result, video_duration, instructions=None, cre
     titles name the subject of the clip. It is NOT evidence of who is speaking
     — the speaker-attribution rule in the template still forbids putting a
     quote in a named mouth.
+
+    ``style`` (default: ``CLIP_STYLE``) ``comedy`` adds the sketch/stand-up
+    rules and sends phrase-level SEGMENTS instead of the raw text + word
+    table: a 4-hour show fits the free-tier budget and the model reads whole
+    lines, while the pipeline's word/sentence snap still fixes the edges.
     """
+    style = style or current_style()
+    min_s, max_s = target_bounds(style)
     words = extract_prompt_words(transcript_result)
+    if style == "comedy":
+        style_fields = {
+            "clip_count": "complete,",
+            "min_s": 30,
+            "style_block": COMEDY_STYLE_BLOCK,
+            "duration_rule": "30s ≤ duration ≤ 120s (usually 40–120s, see SKETCH / STAND-UP MODE)",
+            "anchor_rule": SEGMENT_ANCHOR_RULE,
+            "transcript_block": (
+                "SEGMENTS (one line per phrase: `[start-end] text`, seconds):\n"
+                + build_segment_lines(transcript_result)
+            ),
+        }
+    else:
+        style_fields = {
+            "clip_count": "3–15",
+            "min_s": min_s,
+            "style_block": "",
+            "duration_rule": f"{min_s}s ≤ duration ≤ {max_s}s",
+            "anchor_rule": WORD_ANCHOR_RULE,
+            "transcript_block": (
+                "TRANSCRIPT_TEXT (raw):\n"
+                + json.dumps(transcript_result.get('text', ''))
+                + "\n\nWORDS (TOON tabular: header `words[N]{w,s,e}:`, then one row "
+                "`w,s,e` per word, s/e seconds):\n"
+                + encode_words_toon(words)
+            ),
+        }
 
     user_instructions_block = ""
     if instructions:
@@ -395,10 +564,10 @@ def build_viral_prompt(transcript_result, video_duration, instructions=None, cre
 
     prompt = GEMINI_PROMPT_TEMPLATE.format(
         video_duration=video_duration,
-        transcript_text=json.dumps(transcript_result.get('text', '')),
-        words_toon=encode_words_toon(words),
+        max_s=max_s,
         user_instructions_block=user_instructions_block,
         creator_block=creator_block,
+        **style_fields,
     )
     return prompt, words
 

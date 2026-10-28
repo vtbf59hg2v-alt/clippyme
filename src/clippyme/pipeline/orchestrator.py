@@ -39,6 +39,7 @@ from clippyme.pipeline.run_ops import (
     sanitize_windows_basename,
     should_use_fallback,
 )
+from clippyme.pipeline.transcription.transcribe_cache import file_cache_key
 
 logger = logging.getLogger("clippyme")
 _FALSE_VALUES = {"0", "false", "no", "off"}
@@ -383,7 +384,9 @@ def _load_or_transcribe(args, input_video: str, state: RuntimeState, legacy):
     state.start("transcribing", "transcribing speech")
     # A trimmed source has its own timeline, so it needs its own cache slot —
     # otherwise a later run with a different skip reuses shifted timestamps.
-    cache_key = _transcript_cache_key(args)
+    # An upload has no URL: key it by the file itself, so the same video
+    # uploaded again (a re-cut with other settings) skips transcription.
+    cache_key = _transcript_cache_key(args) or file_cache_key(input_video)
     transcript = legacy._load_cached_transcript(cache_key) if cache_key else None
     if transcript:
         print("♻️ Reusing shared URL transcript cache", flush=True)
@@ -604,7 +607,8 @@ def _render_one_clip(
         success = legacy.process_video_to_vertical(
             clip_source,
             temp_output,
-            reframe_mode=args.reframe_mode,
+            # Per clip: a visual gag is snapped to 'disabled' (full frame).
+            reframe_mode=clip.get("reframe_mode") or args.reframe_mode,
             zoom_end=None if args.no_zoom else 1.05,
             aspect_ratio=aspect_ratio,
             letterbox_zoom=normalize_letterbox_zoom(args.letterbox_zoom),

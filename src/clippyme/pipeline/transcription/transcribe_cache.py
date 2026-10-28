@@ -50,6 +50,29 @@ def get_cache_path(url: str) -> str:
     return os.path.join(CACHE_DIR, f"{url_hash}_transcript.json")
 
 
+_FINGERPRINT_CHUNK = 4 * 1024 * 1024
+
+
+def file_cache_key(path: str) -> str | None:
+    """Cache slot for an uploaded file: its size plus a hash of its head and tail.
+
+    Each upload lands at a new path, so the path says nothing; reading the
+    first and last 4 MB is enough to tell two videos apart and cheap on a
+    multi-GB file. None when the file can't be read.
+    """
+    try:
+        size = os.path.getsize(path)
+        digest = hashlib.sha256(str(size).encode())
+        with open(path, "rb") as f:
+            digest.update(f.read(_FINGERPRINT_CHUNK))
+            if size > 2 * _FINGERPRINT_CHUNK:
+                f.seek(-_FINGERPRINT_CHUNK, os.SEEK_END)
+                digest.update(f.read(_FINGERPRINT_CHUNK))
+    except OSError:
+        return None
+    return f"file:{size}:{digest.hexdigest()[:32]}"
+
+
 def load_cached_transcript(url: str):
     """Load a cached transcript if it exists and is not expired (else None)."""
     cache_path = get_cache_path(url)

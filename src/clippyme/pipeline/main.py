@@ -148,6 +148,7 @@ from clippyme.pipeline.download import (  # noqa: E402
 # Audio normalize + Ken Burns zoom live in a cv2-free, host-testable module.
 from clippyme.pipeline.postprocess import normalize_audio, apply_subtle_zoom  # noqa: E402
 from clippyme.pipeline.analysis import texttiling_ops  # noqa: E402
+from clippyme.core.clip_style import current_style  # noqa: E402
 
 
 
@@ -472,20 +473,22 @@ def get_viral_clips(transcript_result, video_duration, instructions=None):
         return None
 
     max_attempts = int(os.getenv("GEMINI_MAX_RETRIES", "3") or "3")
-    response = None
-    if preferred:
-        try:
-            response, model_name = llm_fallback.generate_with_fallbacks(prompt, fallbacks)
-        except Exception as fb_exc:
-            print(f"❌ {fb_exc}")
-            if client is None:
-                return None
-            fallbacks = []  # already tried; Gemini is the last resort now
-    if response is None:
+
+    def _ask(prompt):
+        """``(response, model_name)`` from the configured chain, or ``(None, None)``."""
+        rest = fallbacks
+        if preferred:
+            try:
+                return llm_fallback.generate_with_fallbacks(prompt, fallbacks)
+            except Exception as fb_exc:
+                print(f"❌ {fb_exc}")
+                if client is None:
+                    return None, None
+                rest = []  # already tried; Gemini is the last resort now
         try:
             if client is None:
                 raise RuntimeError("no Gemini key")
-            response, model_name = generate_with_model_fallback(
+            return generate_with_model_fallback(
                 client, prompt, model_chain, max_attempts=max_attempts)
         except Exception as e:
             gemini_rate_limited = is_rate_limit_error(e)
@@ -493,19 +496,44 @@ def get_viral_clips(transcript_result, video_duration, instructions=None):
             # Out of Gemini quota (or no key): hand the same prompt to the
             # LLM_FALLBACKS chain — local models, the subscription CLI bridge, …
             try:
-                response, model_name = llm_fallback.generate_with_fallbacks(prompt, fallbacks)
+                return llm_fallback.generate_with_fallbacks(prompt, rest)
             except Exception as fb_exc:
-                if fallbacks:
+                if rest:
                     print(f"❌ {fb_exc}")
                 if gemini_rate_limited:
                     get_viral_clips._last_gemini_exhausted = True
                     print("🚫 All Gemini models rate-limited — no clips this run.")
-                return None
+                return None, None
+
+    # Comedy shows: split the show into acts first, then pick clips act by act.
+    two_pass = None
+    if current_style() == "comedy" and os.getenv("CLIP_TWO_PASS", "1") != "0":
+        from clippyme.pipeline.analysis.act_split import select_by_acts
+        two_pass = select_by_acts(
+            transcript_result, video_duration, instructions, _ask,
+            creator=os.getenv("CLIPPYME_CREATOR_NAME"),
+            workers=int(os.getenv("CLIP_ACT_WORKERS", "3") or 3),
+            delay=float(os.getenv("CLIP_ACT_DELAY_SEC", "0") or 0),
+        )
+    if two_pass is not None:
+        response, model_name, act_data = two_pass
+    else:
+        act_data = None
+        response, model_name = _ask(prompt)
+        if response is None:
+            return None
 
     # --- Cost Calculation (pure math in gemini_request) ---
     cost_analysis = None
     try:
         cost_analysis = usage_cost(getattr(response, "usage_metadata", None), model_name)
+        for usage, used in getattr(response, "usages", None) or []:
+            # Two-pass run: the act split plus one call per act.
+            extra = usage_cost(usage, used)
+            if cost_analysis is None:
+                cost_analysis = extra
+            elif extra is not None:
+                cost_analysis = add_call_cost(cost_analysis, extra)
         if cost_analysis:
             print(f"💰 Token Usage ({model_name}): input={cost_analysis['input_tokens']} "
                   f"output={cost_analysis['output_tokens']} "
@@ -519,7 +547,7 @@ def get_viral_clips(transcript_result, video_duration, instructions=None):
     try:
         from clippyme.pipeline.analysis.gemini_parser import (
             parse_gemini_response, validate_and_dedupe, backfill_hook_text, drop_wordless_clips,
-            cap_clips_by_score,
+            cap_clips_by_score, ParseResult,
         )
         from pydantic import ValidationError
 
@@ -567,11 +595,14 @@ def get_viral_clips(transcript_result, video_duration, instructions=None):
                 print(f"⚠️  Gemini retry failed: {e}")
                 return ""
 
-        parse_result = parse_gemini_response(
-            text,
-            retry_fn=_retry_gemini,
-            request_id=os.urandom(4).hex(),
-        )
+        if act_data is not None:
+            parse_result = ParseResult(act_data, "acts", 0.0)
+        else:
+            parse_result = parse_gemini_response(
+                text,
+                retry_fn=_retry_gemini,
+                request_id=os.urandom(4).hex(),
+            )
         if cost_analysis:
             for extra in retry_costs:
                 cost_analysis = add_call_cost(cost_analysis, extra)

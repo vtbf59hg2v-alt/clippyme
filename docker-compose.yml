@@ -86,6 +86,13 @@ services:
       - LLM_FALLBACKS=${LLM_FALLBACKS:-}
       # `gemini` (default) or a fallback name, e.g. `claude`, to answer first.
       - LLM_PRIMARY=${LLM_PRIMARY:-gemini}
+      # `default` (15–60s viral moments) or `comedy` (whole sketch/stand-up
+      # bits, 40–120s). Also set in Settings → Clip style.
+      - CLIP_STYLE=${CLIP_STYLE:-default}
+      # Comedy only: acts first, then clips act by act (0 = one prompt).
+      - CLIP_TWO_PASS=${CLIP_TWO_PASS:-1}
+      - CLIP_ACT_WORKERS=${CLIP_ACT_WORKERS:-3}
+      - CLIP_ACT_DELAY_SEC=${CLIP_ACT_DELAY_SEC:-0}
       - LLM_FALLBACK_TIMEOUT=${LLM_FALLBACK_TIMEOUT:-900}
       # yt-dlp hardening. NOCHECKCERT=1 disables SSL verification only in
       # trusted sandboxes; THROTTLED_RATE is the bytes/sec floor below

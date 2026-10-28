@@ -282,3 +282,50 @@ def test_reformat_prompt_carries_error_and_broken_output_only():
     assert '{"shorts": [broken' in p
     # It must NOT embed the transcript/full template (cost + latency bound).
     assert "VIDEO_DURATION_SECONDS" not in p
+
+
+# --- comedy style ---------------------------------------------------------------
+
+from clippyme.pipeline.analysis.gemini_request import build_segment_lines  # noqa: E402
+
+SHOW = {
+    "text": "ignored",
+    "segments": [
+        {"start": 1.0, "end": 4.0, "text": "Вы знаете, сколько стоит квартира?", "words": []},
+        {"start": 4.0, "end": 6.0, "text": "СМЕХ", "words": []},
+        {"start": 6.0, "end": 7.0, "text": "СМЕХ", "words": []},
+        {"start": 7.0, "end": 9.0, "text": "в Санкт-Петербурге " * 6, "words": []},
+        {"start": 9.0, "end": 10.0, "text": "Танчо.", "words": []},
+        {"start": 10.0, "end": 11.0, "text": "Танчо.", "words": []},
+        {"start": 11.0, "end": 12.0, "text": "Танчо.", "words": []},
+        {"start": 12.0, "end": 13.0, "text": "Да, да, да, это важно.", "speaker": 1, "words": []},
+    ],
+}
+
+
+def test_segment_lines_collapse_asr_loops_and_keep_reactions():
+    lines = build_segment_lines(SHOW).split("\n")
+    assert lines[0] == "[1.0-4.0] Вы знаете, сколько стоит квартира?"
+    assert lines[1] == "[4.0-7.0] (laughter)"            # merged, not flagged
+    assert lines[2] == "[7.0-9.0] в Санкт-Петербурге в Санкт-Петербурге …"
+    assert lines[3] == "[9.0-12.0] Танчо. (ASR repeat ×3)"
+    assert lines[4] == "[12.0-13.0] S1: Да, да, да, это важно."  # real speech kept
+
+
+def test_comedy_prompt_sends_segments_and_sketch_rules():
+    prompt, words = build_viral_prompt(SHOW, 3600, style="comedy")
+    assert "SKETCH / STAND-UP MODE" in prompt
+    assert "30s ≤ duration ≤ 120s" in prompt
+    assert "[1.0-4.0] Вы знаете" in prompt
+    assert "WORDS (TOON" not in prompt and "TRANSCRIPT_TEXT" not in prompt
+    assert '"visual_gag": true' in prompt
+    assert words == []
+
+
+def test_default_prompt_is_unchanged_by_the_style_switch():
+    prompt, _ = build_viral_prompt(TRANSCRIPT, 123.4, style="default")
+    assert "SKETCH / STAND-UP MODE" not in prompt
+    assert "select the 3–15 MOST VIRAL 15–60s moments" in prompt
+    assert "- 15s ≤ duration ≤ 60s" in prompt
+    assert "words[2]{w,s,e}:" in prompt
+    assert "WORDS (TOON tabular: header `words[N]{w,s,e}:`" in prompt

@@ -83,6 +83,7 @@ export function SettingsView({ apiKey, onApiKey, cookiesConfigured, onCookiesCha
   const [model, setModel] = useState('');
   const [fallbacks, setFallbacks] = useState('');
   const [primary, setPrimary] = useState('gemini');
+  const [clipStyle, setClipStyle] = useState('default');
   const [models, setModels] = useState(FALLBACK_MODELS);
   const [loadingModels, setLoadingModels] = useState(false);
 
@@ -118,6 +119,7 @@ export function SettingsView({ apiKey, onApiKey, cookiesConfigured, onCookiesCha
     if (c.GEMINI_MODEL) setModel(c.GEMINI_MODEL);
     setFallbacks(String(c.LLM_FALLBACKS || '').split(';').filter(Boolean).join('\n'));
     setPrimary(String(c.LLM_PRIMARY || 'gemini').toLowerCase());
+    setClipStyle(String(c.CLIP_STYLE || 'default').toLowerCase());
   };
 
   useEffect(() => {
@@ -262,6 +264,18 @@ export function SettingsView({ apiKey, onApiKey, cookiesConfigured, onCookiesCha
               value={primary}
               onChange={(e) => { setPrimary(e.target.value); saveKeys({ LLM_PRIMARY: e.target.value }); }}>
               {primaryOptions(fallbacks, primary).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+            </select>
+          </div>
+        </div>
+        <div className="opt" style={{ borderBottom: 0 }}>
+          <div className="oico"><Icon n="scissors" /></div>
+          <div className="otxt"><div className="ot">Clip style</div><div className="od">What a clip is · applied to new jobs</div></div>
+          <div className="r">
+            <select className="key-input" aria-label="Clip style" style={{ width: 'auto', minWidth: 200, fontFamily: 'var(--font-sans)' }}
+              value={clipStyle}
+              onChange={(e) => { setClipStyle(e.target.value); saveKeys({ CLIP_STYLE: e.target.value }); }}>
+              <option value="default">Viral moments · 15–60s</option>
+              <option value="comedy">Sketch show / stand-up · 40–120s</option>
             </select>
           </div>
         </div>

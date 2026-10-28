@@ -9,14 +9,17 @@ compatibility.
 """
 from pydantic import BaseModel, Field, field_validator
 
+from clippyme.core.clip_style import hard_bounds
+
 
 class ViralClip(BaseModel):
     """A single viral clip candidate emitted by Gemini and validated
     before it's handed to the reframing pipeline.
 
     Duration bounds are deliberately a bit wider than the user-facing
-    15-60s target (10-75s) so we don't throw away near-misses that the
-    Smart Cut post-processing can still rescue.
+    target (10-75s for the default 15-60s, see ``clip_style``) so we don't
+    throw away near-misses that the Smart Cut post-processing can still
+    rescue.
     """
     start: float = Field(..., ge=0)
     end: float = Field(..., gt=0)
@@ -86,6 +89,9 @@ class ViralClip(BaseModel):
     # trim during normalization anyway.
     video_title_for_youtube_short: str = Field("", max_length=110)
     viral_hook_text: str = Field("", max_length=160)
+    # Comedy style: the joke is in something shown on screen, so the clip is
+    # rendered full-frame instead of cropped to a face.
+    visual_gag: bool = False
 
     @field_validator(
         "viral_reason",
@@ -114,9 +120,10 @@ class ViralClip(BaseModel):
         if v <= start:
             raise ValueError(f"end ({v}) must be strictly greater than start ({start})")
         duration = v - start
-        if duration < 10 or duration > 75:
+        low, high = hard_bounds()
+        if duration < low or duration > high:
             raise ValueError(
-                f"clip duration {duration:.2f}s outside allowed range [10, 75]"
+                f"clip duration {duration:.2f}s outside allowed range [{low}, {high}]"
             )
         return v
 

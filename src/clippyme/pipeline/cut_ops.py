@@ -16,6 +16,8 @@ from __future__ import annotations
 
 from typing import Iterable
 
+from clippyme.core.clip_style import target_bounds
+
 # video-use working window for cut padding is 30-200ms. We lead a touch and
 # tail a touch more (the last word's release matters more than the attack).
 DEFAULT_PRE_PAD = 0.05   # 50ms before the first kept word
@@ -563,8 +565,10 @@ def snap_clips_to_transcript(shorts, words, *, source_duration=None,
     mid-sentence; forward extension clamped by duration cap and time-adjacent
     neighbours) → optional waveform-silence refine when ``silences`` is
     non-empty. Also ``setdefault``s ``reframe_mode`` on every entry (the
-    dashboard reads it per clip). Entries without word timing or start/end
-    keys keep their edges untouched.
+    dashboard reads it per clip); a ``visual_gag`` clip under ``auto`` gets
+    ``disabled`` so the on-screen joke stays in frame. Entries without word
+    timing or start/end keys keep their edges untouched. The sentence snap
+    may grow a clip up to the configured style's target length.
 
     Returns the list of :class:`SnapEvent` for clips whose edges moved.
     """
@@ -575,9 +579,12 @@ def snap_clips_to_transcript(shorts, words, *, source_duration=None,
         except (KeyError, TypeError, ValueError):
             raw_intervals.append(None)
 
+    max_duration = float(target_bounds()[1])
     events = []
     for idx, clip in enumerate(shorts):
         clip.setdefault("reframe_mode", default_reframe_mode)
+        if clip.get("visual_gag") and clip["reframe_mode"] == "auto":
+            clip["reframe_mode"] = "disabled"
         if not (words and "start" in clip and "end" in clip):
             continue
         raw_start, raw_end = clip["start"], clip["end"]
@@ -590,6 +597,7 @@ def snap_clips_to_transcript(shorts, words, *, source_duration=None,
             word_start=word_start, word_end=word_end,
             source_duration=source_duration,
             neighbor_start=neighbor_start, neighbor_end=neighbor_end,
+            max_duration=max_duration,
         )
         if silences:
             new_start, new_end, silence_path = refine_edges_to_silence(

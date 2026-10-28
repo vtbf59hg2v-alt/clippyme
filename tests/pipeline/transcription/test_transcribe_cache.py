@@ -66,3 +66,14 @@ def test_save_is_atomic_no_tmp_left(tmp_cache):
     tc.save_transcript_cache(url, {"ok": True})
     assert not os.path.exists(tc.get_cache_path(url) + ".tmp")
     assert json.load(open(tc.get_cache_path(url), encoding="utf-8")) == {"ok": True}
+
+
+def test_file_cache_key_follows_content_not_path(tmp_path, monkeypatch):
+    monkeypatch.setattr(tc, "_FINGERPRINT_CHUNK", 4)
+    a, b, c = tmp_path / "a.mp4", tmp_path / "b.mp4", tmp_path / "c.mp4"
+    a.write_bytes(b"head-middle-tail")
+    b.write_bytes(b"head-middle-tail")
+    c.write_bytes(b"head-middle-TAIL")
+    assert tc.file_cache_key(str(a)) == tc.file_cache_key(str(b))
+    assert tc.file_cache_key(str(a)) != tc.file_cache_key(str(c))
+    assert tc.file_cache_key(str(tmp_path / "missing.mp4")) is None

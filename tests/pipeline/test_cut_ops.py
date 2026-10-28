@@ -356,3 +356,27 @@ def test_snap_clips_neighbor_clamp_prevents_overlap():
     ]
     snap_clips_to_transcript(shorts, _WORDS, source_duration=60.0)
     assert shorts[1]["end"] <= 5.1
+
+
+# --- clip style: visual gags + comedy length ----------------------------------
+
+from clippyme.pipeline.cut_ops import snap_clips_to_transcript  # noqa: E402
+
+
+def test_visual_gag_is_rendered_full_frame_under_auto():
+    shorts = [{"start": 0.0, "end": 40.0, "visual_gag": True},
+              {"start": 50.0, "end": 90.0},
+              {"start": 100.0, "end": 140.0, "visual_gag": True}]
+    shorts[2]["reframe_mode"] = "subject"  # an explicit choice is kept
+    snap_clips_to_transcript(shorts, [], default_reframe_mode="auto")
+    assert [c["reframe_mode"] for c in shorts] == ["disabled", "auto", "subject"]
+
+
+def test_comedy_style_lets_the_sentence_snap_finish_a_long_bit(monkeypatch):
+    words = [{"word": "Начало.", "start": 0.0, "end": 0.5},
+             {"word": "Середина", "start": 50.0, "end": 50.5},
+             {"word": "конец.", "start": 99.0, "end": 99.6}]
+    monkeypatch.setenv("CLIP_STYLE", "comedy")
+    shorts = [{"start": 0.0, "end": 98.5}]
+    snap_clips_to_transcript(shorts, words)
+    assert shorts[0]["end"] >= 99.6
