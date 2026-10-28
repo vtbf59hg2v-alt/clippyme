@@ -330,6 +330,24 @@ export default function App() {
     }
   };
 
+  // Retry re-runs the job that is on screen. The Create form may be empty
+  // (after a reload or a rebuild the URL field resets), so rebuild the request
+  // from the persisted processingMedia instead of silently doing nothing.
+  const retryJob = () => {
+    const m = processingMedia;
+    const reusable = m && ((m.type === 'url' && typeof m.payload === 'string' && m.payload.trim())
+      || (m.type === 'file' && typeof File !== 'undefined' && m.payload instanceof File));
+    if (reusable) {
+      handleProcess({ ...m });
+      return;
+    }
+    if (m?.type === 'file') {
+      pushToast('warn', 'Pick the file again: Start over, then choose it in Create.');
+      return;
+    }
+    startJob();
+  };
+
   const resetToCreate = () => {
     // If a job is still running, actually cancel it on the backend instead of
     // just dropping our local handle (which would leave it churning).
@@ -459,7 +477,7 @@ export default function App() {
       )}
       {tab === 'create' && (status === 'processing' || status === 'error') && (
         <ProcessingView media={processingMedia} status={status} logs={logs} step={currentStep}
-          clips={clips} opts={opts} onCancel={resetToCreate} onRetry={startJob}
+          clips={clips} opts={opts} onCancel={resetToCreate} onRetry={retryJob}
           paused={paused} onPause={pauseCurrent} onResume={resumeCurrent} onStop={stopCurrent} />
       )}
       {tab === 'create' && status === 'complete' && (
