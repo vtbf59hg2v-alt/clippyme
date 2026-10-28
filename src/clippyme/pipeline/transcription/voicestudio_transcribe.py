@@ -33,7 +33,7 @@ Env vars
 - ``VOICESTUDIO_MODEL`` (default ``whisper-1``; the server picks its engine)
 - ``VOICESTUDIO_LANGUAGE`` (ISO code; falls back to ``CLIPPYME_LANGUAGE``;
   blank / ``multi`` → auto-detect)
-- ``VOICESTUDIO_HTTP_TIMEOUT`` (default 7200 s — a long episode on a CPU
+- ``VOICESTUDIO_HTTP_TIMEOUT`` (default 14400 s — a long episode on a CPU
   engine is slow)
 - ``VOICESTUDIO_MAX_RETRIES`` (default 2)
 """
@@ -57,7 +57,7 @@ logger = logging.getLogger("clippyme")
 
 DEFAULT_BASE_URL = "http://host.docker.internal:3900/v1"
 DEFAULT_MODEL = "whisper-1"
-DEFAULT_TIMEOUT = 7200
+DEFAULT_TIMEOUT = 14400  # a 3-hour show on a CPU engine needs well over 2 h
 DEFAULT_MAX_RETRIES = 2
 
 

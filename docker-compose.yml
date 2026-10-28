@@ -62,6 +62,7 @@ services:
       - VOICESTUDIO_BASE_URL=${VOICESTUDIO_BASE_URL:-http://host.docker.internal:3900/v1}
       - VOICESTUDIO_API_KEY=${VOICESTUDIO_API_KEY:-}
       - VOICESTUDIO_LANGUAGE=${VOICESTUDIO_LANGUAGE:-}
+      - VOICESTUDIO_HTTP_TIMEOUT=${VOICESTUDIO_HTTP_TIMEOUT:-14400}
       # Audience-reaction detection: marks (laughter)/(applause) in the
       # transcript for Gemini when the STT provider doesn't (all but
       # ElevenLabs). Heuristic; set false for sources without a live audience.
