@@ -473,10 +473,19 @@ def get_viral_clips(transcript_result, video_duration, instructions=None):
         return None
 
     max_attempts = int(os.getenv("GEMINI_MAX_RETRIES", "3") or "3")
+    # Set once Gemini has failed for the whole chain (bad key, quota): the
+    # two-pass comedy run makes dozens of calls and need not retry it each time.
+    gemini_down = []
 
     def _ask(prompt):
         """``(response, model_name)`` from the configured chain, or ``(None, None)``."""
         rest = fallbacks
+        if gemini_down and fallbacks:
+            try:
+                return llm_fallback.generate_with_fallbacks(prompt, fallbacks)
+            except Exception as fb_exc:
+                print(f"❌ {fb_exc}")
+                return None, None
         if preferred:
             try:
                 return llm_fallback.generate_with_fallbacks(prompt, fallbacks)
@@ -493,6 +502,7 @@ def get_viral_clips(transcript_result, video_duration, instructions=None):
         except Exception as e:
             gemini_rate_limited = is_rate_limit_error(e)
             print(f"❌ Gemini API failed across model chain: {e}")
+            gemini_down.append(True)
             # Out of Gemini quota (or no key): hand the same prompt to the
             # LLM_FALLBACKS chain — local models, the subscription CLI bridge, …
             try:

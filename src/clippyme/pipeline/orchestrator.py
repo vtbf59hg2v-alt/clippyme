@@ -389,7 +389,7 @@ def _load_or_transcribe(args, input_video: str, state: RuntimeState, legacy):
     cache_key = _transcript_cache_key(args) or file_cache_key(input_video)
     transcript = legacy._load_cached_transcript(cache_key) if cache_key else None
     if transcript:
-        print("♻️ Reusing shared URL transcript cache", flush=True)
+        print("♻️ Reusing cached transcript", flush=True)
     else:
         transcript = legacy.transcribe_video(input_video)
         if cache_key:
