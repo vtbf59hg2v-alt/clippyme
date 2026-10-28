@@ -63,6 +63,7 @@ services:
       - VOICESTUDIO_API_KEY=${VOICESTUDIO_API_KEY:-}
       - VOICESTUDIO_LANGUAGE=${VOICESTUDIO_LANGUAGE:-}
       - VOICESTUDIO_HTTP_TIMEOUT=${VOICESTUDIO_HTTP_TIMEOUT:-14400}
+      - VOICESTUDIO_CHUNK_SEC=${VOICESTUDIO_CHUNK_SEC:-300}
       # Audience-reaction detection: marks (laughter)/(applause) in the
       # transcript for Gemini when the STT provider doesn't (all but
       # ElevenLabs). Heuristic; set false for sources without a live audience.

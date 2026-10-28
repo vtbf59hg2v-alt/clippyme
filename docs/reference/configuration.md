@@ -76,7 +76,8 @@ Prices used for cost estimates are in `pipeline/analysis/gemini_request.py`
 | `VOICESTUDIO_API_KEY` | unset | Bearer token, if the server requires one. | Remote VoiceStudio. |
 | `VOICESTUDIO_MODEL` | `whisper-1` | Model name sent to the server; VoiceStudio uses the engine selected in the app. | Rarely. |
 | `VOICESTUDIO_LANGUAGE` | empty (falls back to the job language) | Language code; empty or `multi` auto-detects. | Single-language content. |
-| `VOICESTUDIO_HTTP_TIMEOUT` / `VOICESTUDIO_MAX_RETRIES` | `14400` / `2` | Request limits. | Long episodes on a CPU engine. |
+| `VOICESTUDIO_HTTP_TIMEOUT` / `VOICESTUDIO_MAX_RETRIES` | `14400` / `4` | Request limits (per chunk). | Long episodes on a CPU engine. |
+| `VOICESTUDIO_CHUNK_SEC` | `300` | Long files are sent in chunks of about this many seconds, cut in a pause; `0` sends the file whole. | Gateway timeouts (HTTP 504) on long files. |
 | `CLIPPYME_ADS_CONFIG` / `CLIPPYME_AD_BANNER_PATH` / `CLIPPYME_AD_VIDEO_PATH` | `data/ads.json` / `data/ad_banner.png` / `data/ad_video.mp4` | Where Settings → Ads keeps its settings and uploads. | Tests, custom data dirs. |
 | `CLIPPYME_AUDIENCE_EVENTS` | `true` | Detect audience laughter/applause in the audio and mark it in the transcript for the AI prompt (skipped when ElevenLabs already tagged events). | `false` for sources without a live audience. |
 | `CLIPPYME_AUDIENCE_FLATNESS` / `CLIPPYME_AUDIENCE_LOUDNESS_DB` / `CLIPPYME_AUDIENCE_MIN_SEC` | `0.25` / `-6` / `0.8` | Reaction thresholds: spectral flatness, loudness relative to speech, minimum length. | Raise flatness if speech is flagged; lower it if laughs are missed. |

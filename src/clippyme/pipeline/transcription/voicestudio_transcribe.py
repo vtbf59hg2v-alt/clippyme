@@ -35,13 +35,22 @@ Env vars
   blank / ``multi`` → auto-detect)
 - ``VOICESTUDIO_HTTP_TIMEOUT`` (default 14400 s — a long episode on a CPU
   engine is slow)
-- ``VOICESTUDIO_MAX_RETRIES`` (default 2)
+- ``VOICESTUDIO_MAX_RETRIES`` (default 4, per request)
+- ``VOICESTUDIO_CHUNK_SEC`` (default 300; ``0`` sends the file whole)
+
+Long files are sent in chunks of about ``VOICESTUDIO_CHUNK_SEC`` seconds, cut
+at the quietest moment near each boundary so no word is split. One request
+per chunk keeps each call short — a three-hour show in one synchronous
+request can outlive a gateway timeout (HTTP 504) — and a failure only
+retries that chunk.
 """
 from __future__ import annotations
 
 import logging
 import os
 import re
+import subprocess
+import tempfile
 import time
 from typing import Any
 
@@ -58,7 +67,9 @@ logger = logging.getLogger("clippyme")
 DEFAULT_BASE_URL = "http://host.docker.internal:3900/v1"
 DEFAULT_MODEL = "whisper-1"
 DEFAULT_TIMEOUT = 14400  # a 3-hour show on a CPU engine needs well over 2 h
-DEFAULT_MAX_RETRIES = 2
+DEFAULT_MAX_RETRIES = 4
+DEFAULT_CHUNK_SEC = 300  # VoiceStudio gives one request at most 300 s by default
+CUT_SEARCH_SEC = 20.0  # look this far either side of a boundary for a pause
 
 
 class VoiceStudioError(RuntimeError):
@@ -103,8 +114,11 @@ def _post_with_retries(url: str, headers: dict[str, str], form: list[tuple[str, 
                 raise VoiceStudioError(
                     f"Cannot reach VoiceStudio at {url} after {attempt + 1} attempts: {exc}"
                 ) from exc
-            wait = _compute_backoff(attempt + 1, None)
-            print(f"   ⚠️  VoiceStudio network error ({exc}); retrying in {wait:.1f}s…")
+            # Usually the app is closed or still loading its model: give the
+            # user time to open it rather than giving up after a few seconds.
+            wait = 15.0 * (attempt + 1)
+            print(f"   ⚠️  Can't reach VoiceStudio ({exc}) — is the app open? "
+                  f"Retrying in {wait:.0f}s…")
             time.sleep(wait)
             attempt += 1
             continue
@@ -177,6 +191,93 @@ def _parse_payload(payload: dict[str, Any]) -> list[dict[str, Any]]:
     return [seg for seg in segments if seg["text"]]
 
 
+def _probe_duration(path: str) -> float:
+    try:
+        out = subprocess.run(
+            ["ffprobe", "-v", "error", "-show_entries", "format=duration",
+             "-of", "default=nw=1:nk=1", path],
+            check=False, capture_output=True, text=True, timeout=60)
+        return float(out.stdout.strip() or 0.0)
+    except (OSError, ValueError, subprocess.SubprocessError):
+        return 0.0
+
+
+def plan_cuts(duration: float, chunk_sec: float, rms_db=None, hop_sec: float = 0.05) -> list[float]:
+    """Chunk boundaries in seconds (excluding 0 and the end). With per-frame
+    loudness, each boundary moves to the quietest frame within
+    ``CUT_SEARCH_SEC`` so the cut lands in a pause, not mid-word."""
+    if chunk_sec <= 0 or duration <= chunk_sec * 1.2:
+        return []
+    # The search radius stays under a quarter chunk, so every cut lands at
+    # least half a chunk after the previous one and the loop always advances.
+    search = min(CUT_SEARCH_SEC, chunk_sec / 4)
+    cuts: list[float] = []
+    t = chunk_sec
+    while t < duration - chunk_sec * 0.2:
+        cut = t
+        if rms_db is not None and len(rms_db):
+            lo = max(0, int((t - search) / hop_sec))
+            hi = min(len(rms_db), int((t + search) / hop_sec) + 1)
+            if hi > lo:
+                window = rms_db[lo:hi]
+                cut = (lo + int(min(range(len(window)), key=window.__getitem__))) * hop_sec
+        cuts.append(round(cut, 2))
+        t = cut + chunk_sec
+    return cuts
+
+
+def _extract_chunk(src: str, start: float, end: float | None, dst: str) -> None:
+    cmd = ["ffmpeg", "-nostdin", "-v", "error", "-y", "-ss", f"{start:.3f}", "-i", src]
+    if end is not None:
+        cmd += ["-t", f"{end - start:.3f}"]
+    cmd += ["-vn", "-ac", "1", "-ar", "16000", "-c:a", "flac", dst]
+    proc = subprocess.run(cmd, check=False, capture_output=True, text=True, timeout=900)
+    if proc.returncode != 0 or not os.path.exists(dst):
+        raise VoiceStudioError(f"ffmpeg could not cut chunk at {start:.0f}s: "
+                               f"{(proc.stderr or '').strip()[-300:]}")
+
+
+def _shift(segments: list[dict[str, Any]], offset: float) -> list[dict[str, Any]]:
+    for seg in segments:
+        seg["start"] = round(seg["start"] + offset, 3)
+        seg["end"] = round(seg["end"] + offset, 3)
+        for w in seg["words"]:
+            w["start"] = round(w["start"] + offset, 3)
+            w["end"] = round(w["end"] + offset, 3)
+    return segments
+
+
+def _chunk_cuts(audio_path: str) -> list[float]:
+    try:
+        chunk_sec = float(os.getenv("VOICESTUDIO_CHUNK_SEC", str(DEFAULT_CHUNK_SEC)) or 0)
+    except ValueError:
+        chunk_sec = DEFAULT_CHUNK_SEC
+    duration = _probe_duration(audio_path) if chunk_sec > 0 else 0.0
+    if not plan_cuts(duration, chunk_sec):
+        return []
+    rms_db = None
+    try:
+        from clippyme.pipeline.transcription import audio_events
+        rms_db, _ = audio_events.decode_audio_features(audio_path)
+        hop = audio_events.HOP_SEC
+    except Exception as exc:  # noqa: BLE001 — fall back to fixed-length cuts
+        logger.warning("VoiceStudio chunking: loudness scan failed (%s); fixed cuts", exc)
+        hop = 0.05
+    return plan_cuts(duration, chunk_sec, rms_db, hop)
+
+
+def _transcribe_one(path: str, url: str, headers: dict[str, str], form: list[tuple[str, str]],
+                    timeout: float, max_retries: int) -> dict[str, Any]:
+    response = _post_with_retries(url, headers, form, path, timeout, max_retries)
+    try:
+        payload = response.json()
+    except ValueError as exc:
+        raise VoiceStudioError(f"VoiceStudio returned non-JSON body: {exc}") from exc
+    if not isinstance(payload, dict):
+        raise VoiceStudioError("VoiceStudio returned an unexpected JSON body")
+    return payload
+
+
 def transcribe_with_voicestudio(audio_path: str) -> dict[str, Any]:
     """Transcribe a local audio/video file through VoiceStudio.
 
@@ -201,18 +302,30 @@ def transcribe_with_voicestudio(audio_path: str) -> dict[str, Any]:
           f"— uploading {size_mb:.1f} MB…")
 
     t0 = time.monotonic()
-    response = _post_with_retries(url, headers, _build_form(model, language),
-                                  audio_path, timeout, max_retries)
+    form = _build_form(model, language)
+    cuts = _chunk_cuts(audio_path)
+    if not cuts:
+        payload = _transcribe_one(audio_path, url, headers, form, timeout, max_retries)
+        segments = _parse_payload(payload)
+    else:
+        bounds = [0.0, *cuts]
+        print(f"   ✂️  Long file — sending {len(bounds)} chunks of ~"
+              f"{float(os.getenv('VOICESTUDIO_CHUNK_SEC') or DEFAULT_CHUNK_SEC) / 60:.0f} min")
+        segments, texts, payload = [], [], {}
+        with tempfile.TemporaryDirectory(prefix="voicestudio-") as tmp:
+            for i, start in enumerate(bounds):
+                end = bounds[i + 1] if i + 1 < len(bounds) else None
+                chunk = os.path.join(tmp, f"chunk{i:03d}.flac")
+                _extract_chunk(audio_path, start, end, chunk)
+                part = _transcribe_one(chunk, url, headers, form, timeout, max_retries)
+                payload = payload or part  # first chunk carries the language
+                segments += _shift(_parse_payload(part), start)
+                texts.append((part.get("text") or "").strip())
+                print(f"   🎙️  chunk {i + 1}/{len(bounds)} done "
+                      f"({time.monotonic() - t0:.0f}s elapsed)")
+        payload = {"language": payload.get("language"), "text": " ".join(t for t in texts if t)}
     elapsed = time.monotonic() - t0
 
-    try:
-        payload = response.json()
-    except ValueError as exc:
-        raise VoiceStudioError(f"VoiceStudio returned non-JSON body: {exc}") from exc
-    if not isinstance(payload, dict):
-        raise VoiceStudioError("VoiceStudio returned an unexpected JSON body")
-
-    segments = _parse_payload(payload)
     if not segments:
         raise VoiceStudioError("VoiceStudio returned no segments")
     n_words = sum(len(seg["words"]) for seg in segments)
