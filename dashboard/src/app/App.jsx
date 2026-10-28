@@ -16,7 +16,7 @@ import { HistoryView } from '../features/history/history';
 import { SettingsView, ApiKeyModal } from '../features/settings/settings';
 import { LiveMonitorView } from '../features/live-monitor/live';
 import { EditClipModal } from '../features/clip-editor/editClipModal';
-import { optsToPreselections, restoreJob, deleteHistoryJob, getStorageUsage, cancelJob, pauseJob, resumeJob, stopJob, reframeClip, composeClip, getAds } from '../api/client';
+import { optsToPreselections, restoreJob, deleteHistoryJob, getStorageUsage, listActiveJobs, cancelJob, pauseJob, resumeJob, stopJob, reframeClip, composeClip, getAds } from '../api/client';
 import { setAdsActive } from '../lib/adsState';
 import { allPresets, getDefaultPresetOpts, getDefaultPresetId, saveUserPreset, deleteUserPreset, setDefaultPreset } from '../features/create/presets';
 import { HOOK_STYLE_DEFAULT } from '../lib/uiOptions';
@@ -142,6 +142,7 @@ export default function App() {
   };
 
   useEffect(() => { writeBrowserCredential('gemini_key', apiKey); }, [apiKey]);
+  const [activeJobs, setActiveJobs] = useState([]);
   const syncHistory = useCallback(async () => {
     try {
       const jobs = await refreshHistory();
@@ -149,6 +150,8 @@ export default function App() {
       setHistoryOffline(false);
       try { setStorageUsage(await getStorageUsage()); }
       catch { setStorageUsage(null); }
+      try { setActiveJobs(await listActiveJobs()); }
+      catch { setActiveJobs([]); }
     } catch {
       setAvailableJobIds(null);
       setHistoryOffline(true);
@@ -386,6 +389,15 @@ export default function App() {
     setTab(next);
   };
 
+  // Reattach the processing view to a job that is still running on the backend.
+  const openActiveJob = (job) => {
+    setJobId(job.job_id); setStatus('processing'); setResults(null); setLogs([]);
+    setProcessingMedia(job.source_type === 'url'
+      ? { type: 'url', payload: job.source }
+      : { type: 'file', payload: { name: job.source || 'video' } });
+    setPaused(job.status === 'paused'); setCurrentStep(null); setViewingHistory(false); setTab('create');
+  };
+
   const openHistoryJob = async (h) => {
     try {
       const data = await restoreJob(h.jobId);
@@ -493,6 +505,8 @@ export default function App() {
       {tab === 'history' && !viewingHistory && (
         <HistoryView history={history} availableIds={availableJobIds} offline={historyOffline} storageUsage={storageUsage}
           onOpen={openHistoryJob}
+          activeJobs={activeJobs.filter((j) => j.job_id !== jobId || status !== 'processing')}
+          onOpenActive={openActiveJob}
           onDelete={onDeleteHistoryJob}
           onClear={onClearHistory} />
       )}

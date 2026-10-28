@@ -11,10 +11,32 @@ export function formatStorageBytes(bytes) {
   return `${(bytes / divisor).toFixed(1)} ${unit}`;
 }
 
-export function HistoryView({ history, availableIds, offline = false, storageUsage = null, onOpen, onDelete, onClear }) {
+// Jobs still running on the backend, with a way back to their progress view.
+function ActiveJobs({ jobs, onOpen }) {
+  if (!jobs?.length) return null;
+  return (
+    <Panel style={{ marginBottom: 18 }}>
+      <div role="region" aria-label="Jobs in progress">
+        <strong>In progress</strong>
+        {jobs.map((job) => (
+          <div key={job.job_id} className="opt" style={{ borderBottom: 0 }}>
+            <div className="otxt">
+              <div className="ot">{job.source || job.job_id.slice(0, 8)}</div>
+              <div className="od">{job.status}{job.last_log ? ` · ${String(job.last_log).trim().slice(0, 80)}` : ''}</div>
+            </div>
+            <div className="r"><Btn variant="secondary" size="sm" icon="eye" onClick={() => onOpen?.(job)}>Open</Btn></div>
+          </div>
+        ))}
+      </div>
+    </Panel>
+  );
+}
+
+export function HistoryView({ history, availableIds, offline = false, storageUsage = null, activeJobs = [], onOpen, onOpenActive, onDelete, onClear }) {
   if (!history.length) {
     return (
       <div className="container narrow fade-in">
+        <ActiveJobs jobs={activeJobs} onOpen={onOpenActive} />
         {offline && <p role="status">Backend unavailable — no cached jobs to show.</p>}
         <Hero eyebrow="History" line1="Nothing here yet." sub="Every job you run lands here, ready to reopen, re-export, or publish again." />
         <div className="empty">
@@ -28,6 +50,7 @@ export function HistoryView({ history, availableIds, offline = false, storageUsa
   return (
     <div className="container narrow fade-in">
       {offline && <p role="status">Backend unavailable — showing cached history. Actions need a connection.</p>}
+      <ActiveJobs jobs={activeJobs} onOpen={onOpenActive} />
       {storageUsage && (
         <Panel className="hstorage" style={{ marginBottom: 18 }}>
           <div role="status" aria-label="Disk storage usage">

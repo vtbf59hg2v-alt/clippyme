@@ -72,7 +72,7 @@ from clippyme.storage.config_store import (
     load_zernio_config,
 )
 from clippyme.jobs.job_worker import make_workers
-from clippyme.jobs.history_service import scan_history, is_valid_job_id
+from clippyme.jobs.history_service import is_valid_job_id, list_active_jobs, scan_history
 from clippyme.jobs.storage_usage import storage_overview
 from clippyme.api.config_routes import router as config_router
 
@@ -756,6 +756,12 @@ async def list_history(request: Request):
     require_trusted_config_request(request)
     statuses = {job_id: job.get("status") for job_id, job in jobs.items()}
     return {"jobs": await asyncio.to_thread(scan_history, OUTPUT_DIR, statuses)}
+
+@app.get("/api/jobs/active")
+async def list_active(request: Request):
+    """Jobs still queued, running or paused (History → In progress)."""
+    require_trusted_config_request(request)
+    return {"jobs": list_active_jobs(jobs)}
 
 @app.delete("/api/history/{job_id}")
 async def delete_history(job_id: str, request: Request):

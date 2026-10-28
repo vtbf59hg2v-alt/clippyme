@@ -125,3 +125,37 @@ def scan_history(output_dir: str, job_statuses: dict | None = None) -> List[dict
         logger.warning("Error scanning history: %s", e)
     results.sort(key=lambda x: x["timestamp"], reverse=True)
     return results
+
+
+def _job_source(cmd: list) -> tuple[str, str]:
+    """``(source_type, source)`` from a pipeline argv: the ``-u`` URL or the
+    ``-i`` input file's name. Flags before the module name belong to python."""
+    args = list(cmd or [])
+    if "-m" in args:
+        args = args[args.index("-m") + 2:]
+    for flag, kind in (("-u", "url"), ("--url", "url"), ("-i", "file"), ("--input", "file")):
+        if flag in args[:-1]:
+            value = str(args[args.index(flag) + 1])
+            return kind, value if kind == "url" else os.path.basename(value)
+    return "file", ""
+
+
+def list_active_jobs(jobs: dict) -> List[dict]:
+    """Queued, running and paused jobs, so the dashboard can reopen one after
+    the browser lost track of it (reload, another tab, Create pressed)."""
+    active = []
+    for job_id, job in list(jobs.items()):
+        status = job.get("status")
+        if status not in ("queued", "processing", "paused"):
+            continue
+        source_type, source = _job_source(job.get("cmd") or [])
+        active.append({
+            "job_id": job_id,
+            "status": status,
+            "source_type": source_type,
+            "source": source,
+            "attempt": job.get("attempt", 0),
+            "max_attempts": job.get("max_attempts"),
+            "last_log": (job.get("logs") or [""])[-1],
+        })
+    return active

@@ -17,6 +17,7 @@ rules, and the conventions they share.
 | Clip editing | `POST /api/compose/{job_id}/{clip_index}`, `POST /api/smartcut/…`, `GET /api/transcript/…`, `POST /api/edit-ai/…`, `POST /api/reframe/…` | See [pipeline](../architecture/pipeline.md#compose-edit-layers). |
 | Publishing | `POST /api/publish/{job_id}/{clip_index}`, `GET /api/zernio/accounts` | See [publishing](../architecture/publishing.md). |
 | History | `GET /api/history`, `POST /api/history/{job_id}/restore`, `DELETE /api/history/{job_id}` | Jobs found on disk. |
+| Active jobs | `GET /api/jobs/active` | Queued, running and paused jobs with their source and last log line, so the dashboard can reopen one. |
 | Live monitor | `POST /api/live-monitor/start\|stop`, `POST /api/live-monitor/{id}/config`, `POST /api/live-monitor/{id}/publishing`, `GET /api/live-monitor/status` | See [live monitor](../architecture/live-monitor.md). |
 | Settings | `/api/config`, `/api/config/models`, `/api/config/cookies…`, `/api/config/fonts…`, `/api/config/logo…`, `/api/config/zernio` | Trusted clients only (below). |
 | Health | `GET /api/health` | Liveness. |

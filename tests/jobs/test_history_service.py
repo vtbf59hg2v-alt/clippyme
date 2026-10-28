@@ -157,3 +157,20 @@ def test_record_graceful_stop_does_not_create_runtime_for_legacy_jobs(tmp_path):
     assert record_graceful_stop(job_dir) is False
     assert not os.path.exists(runtime_path(job_dir))
     assert hs.scan_history(str(tmp_path))[0]["status"] == "complete"
+
+
+def test_list_active_jobs_names_the_source_and_skips_finished():
+    jobs = {
+        VALID_UUID: {"status": "processing", "attempt": 1, "max_attempts": 3,
+                     "logs": ["a", "   🎙️  chunk 7/47 done"],
+                     "cmd": ["python", "-u", "-m", "clippyme.pipeline.orchestrator",
+                             "-i", "/app/uploads/x/Comedy Club.mp4", "-o", "out"]},
+        VALID_UUID_2: {"status": "queued", "cmd": ["python", "-u", "-m", "m", "-u", "https://y.t/v"]},
+        "done": {"status": "completed", "cmd": []},
+    }
+    active = {j["job_id"]: j for j in hs.list_active_jobs(jobs)}
+    assert set(active) == {VALID_UUID, VALID_UUID_2}
+    assert active[VALID_UUID]["source_type"] == "file"
+    assert active[VALID_UUID]["source"] == "Comedy Club.mp4"
+    assert active[VALID_UUID]["last_log"].endswith("chunk 7/47 done")
+    assert (active[VALID_UUID_2]["source_type"], active[VALID_UUID_2]["source"]) == ("url", "https://y.t/v")

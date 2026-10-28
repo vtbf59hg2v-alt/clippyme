@@ -54,3 +54,14 @@ test('storage metrics are readable and low-space warning points to selective job
   expect(screen.getByRole('alert')).toHaveTextContent('Low disk space');
   expect(screen.getByRole('button', { name: 'Delete job' })).toBeInTheDocument();
 });
+
+test('lists running jobs and reopens one', () => {
+  const onOpenActive = vi.fn();
+  const job = { job_id: 'f212c854-2840-499b-b94d-28f4f6cd4b68', status: 'processing',
+    source_type: 'file', source: 'Comedy.mp4', last_log: '   🎙️  chunk 7/47 done' };
+  render(<HistoryView history={[]} activeJobs={[job]} onOpenActive={onOpenActive} />);
+  expect(screen.getByText('Comedy.mp4')).toBeTruthy();
+  expect(screen.getByText(/chunk 7\/47 done/)).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: /open/i }));
+  expect(onOpenActive).toHaveBeenCalledWith(job);
+});

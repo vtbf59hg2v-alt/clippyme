@@ -210,6 +210,15 @@ export async function getStorageUsage() {
   return data;
 }
 
+// Jobs still queued, running or paused — lets History reopen one the browser
+// lost track of (reload, another tab, Create pressed mid-run).
+export async function listActiveJobs() {
+  const res = await apiFetch(getApiUrl('/api/jobs/active'));
+  if (!res.ok) throw new Error(`Active jobs request failed: HTTP ${res.status}`);
+  const data = await res.json();
+  return Array.isArray(data?.jobs) ? data.jobs.filter((job) => job && typeof job.job_id === 'string') : [];
+}
+
 export async function listHistoryJobs() {
   const res = await apiFetch(getApiUrl('/api/history'));
   if (!res.ok) {
