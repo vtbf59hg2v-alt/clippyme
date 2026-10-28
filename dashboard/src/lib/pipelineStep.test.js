@@ -84,3 +84,19 @@ test('pipelineStepMeta.reframe reflects the user-chosen mode (incl. legacy boole
   assert.equal(pipelineStepMeta([], { reframe: false }).reframe, '4:3 · bars'); // legacy back-compat
   assert.equal(pipelineStepMeta([], {}).reframe, 'face tracking'); // default
 });
+
+test('pipelineStepMeta names VoiceStudio and non-Gemini models', () => {
+  assert.equal(
+    pipelineStepMeta(['🎙️  Transcribing with VoiceStudio [http://host.docker.internal:3900/v1, lang=ru] (52.1 MB)…'], {}).transcribe,
+    'voicestudio · ru',
+  );
+  assert.equal(
+    pipelineStepMeta(['🤖  Initializing Gemini with model chain: gemini-3.5-flash → gemini-2.5-flash'], {}).detect,
+    'gemini-3.5-flash',
+  );
+  assert.equal(pipelineStepMeta(['🎯 Main model: claude (claude) — Gemini is the last resort.'], {}).detect, 'claude');
+  assert.equal(
+    pipelineStepMeta(['🔁 Trying fallback model codex (codex)…', '   ✅ codex answered in 40s'], {}).detect,
+    'codex (fallback)',
+  );
+});

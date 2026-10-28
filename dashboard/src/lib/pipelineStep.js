@@ -70,6 +70,9 @@ export function pipelineStepMeta(logs = [], opts = {}) {
   if (joined.includes('falling back to Faster-Whisper')) {
     m = joined.match(/Transcribing with Faster-Whisper \[([^\]]+)\]/);
     meta.transcribe = m ? `whisper ${m[1].trim().toLowerCase()} (fallback)` : 'whisper (fallback)';
+  } else if (joined.includes('Transcribing with VoiceStudio')) {
+    m = joined.match(/Transcribing with VoiceStudio \[[^,\]]*, lang=([\w-]+)/);
+    meta.transcribe = m ? `voicestudio · ${m[1].toLowerCase()}` : 'voicestudio';
   } else if ((m = joined.match(/Transcribing with Deepgram \[([^,\]]+)/))) {
     meta.transcribe = `deepgram ${m[1].trim().toLowerCase()}`;
   } else if ((m = joined.match(/Transcribing with Faster-Whisper \[([^\]]+)\]/))) {
@@ -79,8 +82,13 @@ export function pipelineStepMeta(logs = [], opts = {}) {
   // --- Detect moments: Gemini model, or the no-AI TextTiling fallback ------
   if (joined.includes('TextTiling')) {
     meta.detect = 'topic segments · no AI';
+  } else if ((m = joined.match(/✅ (\S+) answered in/))) {
+    meta.detect = `${m[1]} (fallback)`;
+  } else if ((m = joined.match(/Main model: (\S+)/))) {
+    meta.detect = m[1];
   } else if (
     (m = joined.match(/Gemini model override:\s*([\w.-]+)/)) ||
+    (m = joined.match(/Initializing Gemini with model chain:\s*([\w.-]+)/)) ||
     (m = joined.match(/Initializing Gemini with model:\s*([\w.-]+)/))
   ) {
     meta.detect = m[1];

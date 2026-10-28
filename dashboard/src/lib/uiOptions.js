@@ -160,8 +160,8 @@ export const LANGUAGES = [
 
 export const PIPE = [
   { id: 'download', name: 'Download', icon: 'download', meta: 'fetch source' },
-  { id: 'transcribe', name: 'Transcribe', icon: 'audio-lines', meta: 'deepgram nova-3' },
-  { id: 'detect', name: 'Detect moments', icon: 'sparkles', meta: 'gemini scoring' },
+  { id: 'transcribe', name: 'Transcribe', icon: 'audio-lines', meta: 'speech to text' },
+  { id: 'detect', name: 'Detect moments', icon: 'sparkles', meta: 'AI scoring' },
   { id: 'reframe', name: 'Reframe 9:16', icon: 'scan-face', meta: 'face tracking' },
   // Captions/hooks are NOT burned during the main render — they're applied at
   // compose/download time (user-triggered in results). Worded as a roadmap node
