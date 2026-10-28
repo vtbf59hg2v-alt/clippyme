@@ -27,7 +27,7 @@ host-tests = [
     "uvicorn==0.42.0",
     "click>=8.3.3,<9",  # PYSEC-2026-2132 (click.edit command injection)
     "python-multipart==0.0.31",
-    "yt-dlp>=2026.6.9,<2027",  # CVE-2026-50023 / CVE-2026-50574 fixed in 2026.6.9
+    "yt-dlp>=2026.10.26,<2027",  # CVE fixes in 2026.6.9; 2026.10.26 for YouTube 403s
     "google-genai>=1.70.0,<2.0.0",
     "python-dotenv==1.2.2",
     "Pillow>=12.3.0,<13",

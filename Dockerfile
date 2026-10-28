@@ -156,7 +156,7 @@ RUN --mount=type=cache,target=/root/.cache/pip \
 
 # NOTE: do NOT `pip install --upgrade yt-dlp` here — that would un-pin yt-dlp
 # from requirements.lock and pull whatever the latest unreviewed release is at
-# build time. The reviewed floor is yt-dlp>=2026.6.9,<2027; update it by
+# build time. The reviewed floor is yt-dlp>=2026.10.26,<2027; update it by
 # regenerating the lock.
 
 # Create non-root user

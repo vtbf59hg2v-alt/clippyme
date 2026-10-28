@@ -10,11 +10,13 @@ ultralytics==8.4.33
 torch==2.11.0
 torchvision==0.26.0
 tqdm==4.67.3
+# Floor raised to 2026.10.26: older releases get HTTP 403 / "page needs to be
+# reloaded" from YouTube (Oct 2026).
 # Floor raised to 2026.6.9: that release fixes CVE-2026-50023 (dangerous
 # file-type creation via insufficient filename sanitization, bypass of
 # CVE-2024-38519) and CVE-2026-50574 (aria2c manifest arbitrary file write).
 # Earlier 2026.3.x releases are vulnerable, so the floor must not permit them.
-yt-dlp>=2026.6.9,<2027
+yt-dlp>=2026.10.26,<2027
 faster-whisper==1.2.1
 # Capped below 2.0 so an unattended rebuild can't pull a breaking major
 # release of the SDK (gemini_service / gemini_parser depend on the 1.x API).

@@ -331,5 +331,5 @@ uvicorn==0.42.0
     # via -r requirements.txt
 websockets==16.0
     # via google-genai
-yt-dlp==2026.7.4
+yt-dlp==2026.10.26
     # via -r requirements.txt
