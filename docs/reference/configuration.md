@@ -42,9 +42,9 @@ variable is unset; a few differ in `docker-compose.yml`, noted as *compose*.
 |------|---------|---------|----------------|
 | `GEMINI_API_KEY` | unset | Gemini key. Usually entered in Settings. | — |
 | `GEMINI_MODEL` | `gemini-3.5-flash` | Preferred model; also selectable per job. | To use a different model by default. |
-| `GEMINI_FALLBACK_MODELS` | `gemini-3-flash-preview,gemini-2.5-flash,gemini-3.1-flash-lite,gemini-2.5-flash-lite` | Models tried in order after quota or high-demand errors. Each job starts again from `GEMINI_MODEL`. | Paid plans that can use pro models. |
+| `GEMINI_FALLBACK_MODELS` | `gemini-3-flash-preview,gemini-3.5-flash-lite,gemini-3.1-flash-lite` | Models tried in order after quota or high-demand errors. Each job starts again from `GEMINI_MODEL`. | Paid plans that can use pro models. |
 | `GEMINI_MAX_RETRIES` | `3` | Attempts per model call before moving on. | Rarely. |
-| `GEMINI_RETRY_MODEL` | `gemini-2.5-flash` | Model used to reformat a malformed response. | Rarely. |
+| `GEMINI_RETRY_MODEL` | `gemini-3.5-flash-lite` | Model used to reformat a malformed response. | Rarely. |
 
 Prices used for cost estimates are in `pipeline/analysis/gemini_request.py`
 (`MODEL_PRICING`), not configurable.

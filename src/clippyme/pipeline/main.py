@@ -532,7 +532,7 @@ def get_viral_clips(transcript_result, video_duration, instructions=None):
             produced text we just failed to parse, the bottleneck is
             formatting, not understanding. Decouple the two concerns
             (Gopalan, Google Cloud Community, Oct 2025) and hand the
-            retry to gemini-2.5-flash which is ~10x cheaper than pro
+            retry to a flash-lite model, which is ~10x cheaper than pro
             and plenty capable of reformatting JSON.
 
             Crucially, we do NOT resend the full transcript + prompt:

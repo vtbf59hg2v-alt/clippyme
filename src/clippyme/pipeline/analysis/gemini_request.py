@@ -19,7 +19,7 @@ import time
 # here has UNKNOWN cost — never priced as $0.
 LONG_PROMPT_TOKENS = 200_000
 # Model of the level-4 reformat retry unless GEMINI_RETRY_MODEL overrides it.
-DEFAULT_RETRY_MODEL = "gemini-2.5-flash"
+DEFAULT_RETRY_MODEL = "gemini-3.5-flash-lite"
 _FLASH_36_PROMO = {"until": "2026-12-31", "input": 0.75, "output": 3.75}
 MODEL_PRICING = {
     "gemini-3.8-flash": {"input": 1.50, "output": 7.50, "promo": _FLASH_36_PROMO},
@@ -427,8 +427,9 @@ def build_model_chain(primary_model: str, fallback_models: str | None = None) ->
         # NB: pro models (gemini-*-pro-*) have limit:0 on the free API tier —
         # they 429 instantly, so they are intentionally NOT in the default
         # chain. Add one here (or via GEMINI_FALLBACK_MODELS) only on a paid plan.
-        "gemini-3-flash-preview,gemini-2.5-flash,"
-        "gemini-3.1-flash-lite,gemini-2.5-flash-lite"
+        # The 2.5 models answer 404 "no longer available to new users"
+        # (Oct 2026), so a fresh key only gets the 3.x tiers.
+        "gemini-3-flash-preview,gemini-3.5-flash-lite,gemini-3.1-flash-lite"
     )
     models = [primary_model, *(part.strip() for part in raw.split(","))]
     return list(dict.fromkeys(model for model in models if model))

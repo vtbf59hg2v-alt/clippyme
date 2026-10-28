@@ -18,7 +18,7 @@ import { getCredentialMode, setCredentialMode } from '../../lib/credentialStorag
 // Mirrors the allow-list prefixes (gemini-2.5- / gemini-3) the backend accepts.
 const FALLBACK_MODELS = [
   { name: 'gemini-3.5-flash', display_name: 'Gemini 3.5 Flash — recommended' },
-  { name: 'gemini-2.5-flash', display_name: 'Gemini 2.5 Flash — budget' },
+  { name: 'gemini-3.5-flash-lite', display_name: 'Gemini 3.5 Flash-Lite — budget' },
   { name: 'gemini-3.1-pro-preview', display_name: 'Gemini 3.1 Pro — max quality' },
   { name: 'gemini-2.5-pro', display_name: 'Gemini 2.5 Pro — max quality' },
 ];
